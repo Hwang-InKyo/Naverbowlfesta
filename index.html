@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎳 전국대회 관리</title>
+  <link rel="stylesheet" href="css/style.css?v=1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎳</text></svg>">
+</head>
+<body>
+  <!-- 로그인 화면 -->
+  <div id="login-screen">
+    <div class="login-box">
+      <div class="login-icon">🎳</div>
+      <h1 id="login-org">전국 볼링 클럽 연합</h1>
+      <p class="login-sub">전국대회 관리 · 회원 성적 조회</p>
+      <span id="login-mode" class="mode-badge"></span>
+
+      <div class="login-tabs">
+        <button class="login-tab active" data-login-tab="member">회원</button>
+        <button class="login-tab" data-login-tab="admin">관리자</button>
+        <button class="login-tab" data-login-tab="guest">둘러보기</button>
+      </div>
+
+      <form id="login-member" class="login-panel active" autocomplete="off">
+        <select id="login-club" required><option value="">클럽 선택</option></select>
+        <input type="text" id="login-name" placeholder="이름" required>
+        <input type="password" id="login-pin" placeholder="PIN" inputmode="numeric" maxlength="6" required>
+        <button class="btn btn-primary" type="submit">로그인</button>
+      </form>
+
+      <form id="login-admin" class="login-panel" autocomplete="off">
+        <input type="password" id="login-admin-pin" placeholder="관리자 PIN" inputmode="numeric" maxlength="6" required>
+        <button class="btn btn-primary" type="submit">관리자 로그인</button>
+      </form>
+
+      <div id="login-guest" class="login-panel">
+        <p class="hint">로그인 없이 대회 일정과 순위를 조회합니다.</p>
+        <button class="btn btn-primary" id="btn-guest" type="button">게스트로 보기</button>
+      </div>
+
+      <p id="login-error" class="login-error"></p>
+      <p id="login-demo-hint" class="hint"></p>
+      <button class="link-btn" id="btn-login-server" type="button">⚙ 서버 연결 설정</button>
+    </div>
+  </div>
+
+  <div id="app-wrap" style="display:none;">
+    <header>
+      <div class="header-inner">
+        <div>
+          <h1 id="header-org">🎳 전국 볼링 클럽 연합</h1>
+          <p class="subtitle">전국대회 관리 시스템</p>
+        </div>
+        <div class="header-right">
+          <span id="user-badge" class="user-badge"></span>
+          <button id="btn-logout" class="btn-icon" title="로그아웃">🔓</button>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs" id="main-tabs">
+      <button class="tab-btn active" data-tab="home">🏠 홈</button>
+      <button class="tab-btn" data-tab="tournaments">🏆 대회</button>
+      <button class="tab-btn" data-tab="me" data-role="member">👤 내 정보</button>
+      <button class="tab-btn" data-tab="clubs">🏢 클럽</button>
+      <button class="tab-btn" data-tab="members">👥 회원</button>
+      <button class="tab-btn" data-tab="season">📈 시즌랭킹</button>
+      <button class="tab-btn" data-tab="settings" data-role="admin">⚙️ 설정</button>
+    </nav>
+
+    <main>
+      <section id="tab-home" class="tab-content active"></section>
+      <section id="tab-tournaments" class="tab-content"></section>
+      <section id="tab-me" class="tab-content"></section>
+      <section id="tab-clubs" class="tab-content"></section>
+      <section id="tab-members" class="tab-content"></section>
+      <section id="tab-season" class="tab-content"></section>
+      <section id="tab-settings" class="tab-content"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <div id="loading" class="loading" style="display:none;"><div class="spinner"></div></div>
+
+  <script src="js/ranking.js?v=1"></script>
+  <script src="js/sample-data.js?v=1"></script>
+  <script src="js/store.js?v=1"></script>
+  <script src="js/app.js?v=1"></script>
+</body>
+</html>
