@@ -2,146 +2,110 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const R = require('../js/ranking.js');
 
-const clubs = [
-  { id: 'c1', name: '서울' }, { id: 'c2', name: '부산' }
+const regions = [{ id: 'r1', name: '서울' }, { id: 'r2', name: '부산' }, { id: 'r3', name: '대구' }];
+const settings = R.mergeSettings({ handicap: { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 }, repCount: 2 });
+const players = [
+  { id: 'p1', name: '김철수', regionId: 'r1', gender: 'M', avg: 190, isRep: true, games: [200, 190, 210] },  // hcp 8  -> 600+24 = 624
+  { id: 'p2', name: '이영희', regionId: 'r1', gender: 'F', avg: 160, isRep: true, games: [150, 160, 170] },  // hcp 40 -> 480+120 = 600
+  { id: 'p3', name: '박민수', regionId: 'r2', gender: 'M', avg: 200, isRep: true, games: [208, 208, 208] },  // hcp 0  -> 624
+  { id: 'p4', name: '최지우', regionId: 'r2', gender: 'F', avg: 140, isRep: true, games: [130, 140, null] }, // hcp 56 -> 270+112 = 382
+  { id: 'p5', name: '정대구', regionId: 'r3', gender: 'M', avg: 170, isRep: false, games: [180, 180, 180] },  // hcp 24 -> 540+72 = 612
+  { id: 'p6', name: '한수지', regionId: 'r3', gender: 'F', avg: 150, isRep: true, games: [140, 150, 160] }    // hcp 48 -> 450+144 = 594
 ];
-const members = [
-  { id: 'm1', name: '김철수', clubId: 'c1', gender: 'M', avg: 190 },
-  { id: 'm2', name: '이영희', clubId: 'c1', gender: 'F', avg: 160 },
-  { id: 'm3', name: '박민수', clubId: 'c2', gender: 'M', avg: 200 },
-  { id: 'm4', name: '최지우', clubId: 'c2', gender: 'F', avg: 140 }
+const teams = [
+  { id: 't1', event: 'scotch', regionId: 'r1', members: ['p1', 'p2'], games: [180, 190] }, // hcp avg(8,40)=24 -> 370+48 = 418
+  { id: 't2', event: 'scotch', regionId: 'r2', members: ['p3', 'p4'], games: [200, 170] }, // hcp avg(0,56)=28 -> 370+56 = 426
+  { id: 't3', event: 'baker', regionId: 'r3', members: ['p5', 'p6'], games: [150, 150] },   // invalid size (2 of 3)
+  { id: 't4', event: 'team5', regionId: 'r1', members: ['p1'], games: [900] }
 ];
-const rule = { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 };
 
-test('calcHandicap: diff rule, cap and female bonus', () => {
-  assert.equal(R.calcHandicap(190, 'M', rule), 8);        // (200-190)*0.8 = 8
-  assert.equal(R.calcHandicap(160, 'F', rule), 40);       // 32 + 8
-  assert.equal(R.calcHandicap(140, 'F', rule), 56);       // 48 + 8
-  assert.equal(R.calcHandicap(100, 'M', rule), 60);       // capped
-  assert.equal(R.calcHandicap(100, 'F', rule), 68);       // cap applies before bonus
-  assert.equal(R.calcHandicap(210, 'M', rule), 0);        // no negative handicap
-  assert.equal(R.calcHandicap(191, 'M', rule), 7);        // 7.2 -> floor
+test('handicap rule', () => {
+  assert.equal(R.calcHandicap(190, 'M', settings.handicap), 8);
+  assert.equal(R.calcHandicap(160, 'F', settings.handicap), 40);
+  assert.equal(R.calcHandicap(100, 'M', settings.handicap), 60);
+  assert.equal(R.calcHandicap(210, 'M', settings.handicap), 0);
   assert.equal(R.calcHandicap(150, 'M', { type: 'none' }), 0);
-  assert.equal(R.calcHandicap(150, 'M', { type: 'diff', base: 200 }), 50); // rate defaults to 1
+  assert.equal(R.playerHandicap({ avg: 150, gender: 'M', handicapOverride: 12 }, settings.handicap), 12);
 });
 
-test('assignDivision picks the highest matching band', () => {
-  const divs = [{ name: 'C', min: 0 }, { name: 'A', min: 180 }, { name: 'B', min: 160 }];
-  assert.equal(R.assignDivision(185, divs), 'A');
-  assert.equal(R.assignDivision(180, divs), 'A');
-  assert.equal(R.assignDivision(170, divs), 'B');
-  assert.equal(R.assignDivision(120, divs), 'C');
-  assert.equal(R.assignDivision(120, []), '');
+test('mergeSettings fills defaults and keeps overrides', () => {
+  const s = R.mergeSettings({ points: { scotch: [9] }, basis: 'scratch' });
+  assert.deepEqual(s.points.scotch, [9]);
+  assert.deepEqual(s.points.baker, [3, 2, 1]);
+  assert.equal(s.basis, 'scratch');
+  assert.equal(s.groups.length, 3);
 });
 
-test('individualRanking: totals, tiebreak and ranks', () => {
-  const t = {
-    numGames: 3, handicap: rule,
-    entries: [
-      { memberId: 'm1', games: [200, 190, 210] },          // scratch 600 + 8*3 = 624
-      { memberId: 'm2', games: [150, 160, 170] },          // 480 + 40*3 = 600
-      { memberId: 'm3', games: [208, 208, 208] },          // 624 + 0   = 624 -> tie with m1 on total; scratch 624 > 600 -> m3 first
-      { memberId: 'm4', games: [130, 140, null] }          // 270 + 56*2 = 382 (2 games)
-    ]
-  };
-  const rows = R.individualRanking(t, members, clubs);
-  assert.deepEqual(rows.map(r => r.name), ['박민수', '김철수', '이영희', '최지우']);
-  assert.deepEqual(rows.map(r => r.rank), [1, 2, 3, 4]);
-  assert.equal(rows[0].total, 624);
-  assert.equal(rows[1].total, 624);
-  assert.equal(rows[3].gamesPlayed, 2);
-  assert.equal(rows[3].total, 382);
-  assert.equal(rows[3].high, 140);
+test('individual ranking by gender with tiebreak and shared ranks', () => {
+  const rows = R.playerRows(players, regions, settings);
+  const male = R.individualRanking(rows, r => r.gender === 'M');
+  assert.deepEqual(male.map(r => [r.name, r.total, r.rank]), [['박민수', 624, 1], ['김철수', 624, 2], ['정대구', 612, 3]]);
+  const female = R.individualRanking(rows, r => r.gender === 'F');
+  assert.deepEqual(female.map(r => r.name), ['이영희', '한수지', '최지우']);
+  assert.equal(female[2].gamesPlayed, 2);
+  // 완전 동점 → 공동 순위
+  const tie = R.individualRanking(R.playerRows([{ id: 'a', name: 'A', gender: 'M', avg: 200, games: [200] }, { id: 'b', name: 'B', gender: 'M', avg: 200, games: [200] }, { id: 'c', name: 'C', gender: 'M', avg: 200, games: [100] }], regions, { games: { individual: 1 } }));
+  assert.deepEqual(tie.map(r => r.rank), [1, 1, 3]);
 });
 
-test('identical rows share a rank and the next rank is skipped', () => {
-  const t = {
-    numGames: 1, handicap: { type: 'none' },
-    entries: [
-      { memberId: 'm1', games: [200] }, { memberId: 'm3', games: [200] }, { memberId: 'm2', games: [150] }
-    ]
-  };
-  const rows = R.individualRanking(t, members, clubs);
-  assert.deepEqual(rows.map(r => r.rank), [1, 1, 3]);
+test('scratch basis changes ordering', () => {
+  const rows = R.playerRows(players, regions, { ...settings, basis: 'scratch' });
+  const male = R.individualRanking(rows, r => r.gender === 'M');
+  assert.deepEqual(male.map(r => r.name), ['박민수', '김철수', '정대구']);
+  assert.equal(male[0].score, 624);
+  assert.equal(male[1].score, 600);
 });
 
-test('entry snapshot avg / handicap override win over member record', () => {
-  const t = { numGames: 1, handicap: rule, entries: [
-    { memberId: 'm1', avg: 150, games: [100] },              // handicap 40 from snapshot avg
-    { memberId: 'm3', handicapOverride: 15, games: [100] }
-  ] };
-  const rows = R.buildRows(t, members, clubs);
-  assert.equal(rows[0].handicap, 40);
-  assert.equal(rows[1].handicap, 15);
+test('team rows: handicap modes and validity', () => {
+  const rows = R.playerRows(players, regions, settings);
+  const scotch = R.teamRanking(R.teamRows(teams, 'scotch', rows, regions, settings));
+  assert.deepEqual(scotch.map(r => [r.regionName, r.handicap, r.total, r.rank]), [['부산', 28, 426, 1], ['서울', 24, 418, 2]]);
+  const sum = R.teamRows(teams, 'scotch', rows, regions, { ...settings, teamHandicap: { scotch: 'sum' } });
+  assert.equal(sum.find(t => t.teamId === 't1').handicap, 48);
+  const none = R.teamRows(teams, 'scotch', rows, regions, { ...settings, teamHandicap: { scotch: 'none' } });
+  assert.equal(none[0].handicap, 0);
+  const baker = R.teamRows(teams, 'baker', rows, regions, settings);
+  assert.equal(baker[0].valid, false);
+  const t5 = R.teamRows(teams, 'team5', rows, regions, settings);
+  assert.equal(t5[0].handicap, 0);
+  assert.equal(t5[0].total, 900);
 });
 
-test('clubRanking sums top N and flags short rosters', () => {
-  const t = { numGames: 1, handicap: { type: 'none' }, clubScoring: { topN: 1 }, entries: [
-    { memberId: 'm1', games: [180] }, { memberId: 'm2', games: [170] },
-    { memberId: 'm3', games: [175] }, { memberId: 'm4', games: [120] }
-  ] };
-  const res = R.computeResults(t, members, clubs);
-  assert.deepEqual(res.club.map(c => [c.clubName, c.total, c.rank, c.short]), [['서울', 180, 1, false], ['부산', 175, 2, false]]);
-  const res2 = R.computeResults({ ...t, clubScoring: { topN: 3 } }, members, clubs);
-  assert.equal(res2.club[0].clubName, '서울');
-  assert.equal(res2.club[0].total, 350);
-  assert.equal(res2.club[0].short, true);
+test('rep ranking sums designated reps and flags short/over', () => {
+  const rows = R.playerRows(players, regions, settings);
+  const reps = R.repRanking(rows, regions, settings);
+  // 서울 624+600=1224, 부산 624+382=1006, 대구 594 (1명, short)
+  assert.deepEqual(reps.map(r => [r.regionName, r.score, r.rank, r.short]), [['서울', 1224, 1, false], ['부산', 1006, 2, false], ['대구', 594, 3, true]]);
 });
 
-test('gender sub-rankings and high game', () => {
-  const t = { numGames: 2, handicap: rule, entries: [
-    { memberId: 'm1', games: [180, 220] }, { memberId: 'm2', games: [170, 150] },
-    { memberId: 'm3', games: [200, 190] }, { memberId: 'm4', games: [120, 130] }
-  ] };
-  const res = R.computeResults(t, members, clubs);
-  assert.deepEqual(res.female.map(r => [r.name, r.rank]), [['이영희', 1], ['최지우', 2]]);
-  assert.deepEqual(res.male.map(r => r.name), ['김철수', '박민수']);
-  assert.equal(res.highGame[0].name, '김철수');
-  assert.equal(res.highGame[0].high, 220);
+test('region standings: points from every event', () => {
+  const res = R.regionStandings({ settings, regions, players, teams });
+  const by = Object.fromEntries(res.standings.map(r => [r.regionName, r]));
+  // 남자: 박민수1(5) 김철수2(4) 정대구3(3) / 여자: 이영희1(5) 한수지2(4) 최지우3(3)
+  // 대표: 서울1(5) 부산2(4) 대구3(3) / 스카치: 부산1(3) 서울2(2) / 베이커: 대구1(3)
+  assert.equal(by['서울'].male, 4); assert.equal(by['서울'].female, 5); assert.equal(by['서울'].reps, 5); assert.equal(by['서울'].scotch, 2);
+  assert.equal(by['서울'].total, 16);
+  assert.equal(by['부산'].total, 5 + 3 + 4 + 3);
+  assert.equal(by['대구'].total, 3 + 4 + 3 + 3);
+  assert.deepEqual(res.standings.map(r => [r.regionName, r.rank]), [['서울', 1], ['부산', 2], ['대구', 3]]);
+  assert.equal(by['서울'].details.length, 4);
+  assert.equal(by['서울'].team5, 0); // 5인조는 기본 미반영
 });
 
-test('season ranking uses only final tournaments and awards points', () => {
-  const base = { numGames: 1, handicap: { type: 'none' } };
-  const t1 = { ...base, id: 't1', date: '2026-03-01', status: 'final', entries: [{ memberId: 'm1', games: [200] }, { memberId: 'm3', games: [190] }] };
-  const t2 = { ...base, id: 't2', date: '2026-06-01', status: 'final', entries: [{ memberId: 'm1', games: [150] }, { memberId: 'm3', games: [190] }] };
-  const t3 = { ...base, id: 't3', date: '2026-09-01', status: 'live', entries: [{ memberId: 'm3', games: [300] }] };
-  const t4 = { ...base, id: 't4', date: '2025-09-01', status: 'final', entries: [{ memberId: 'm3', games: [300] }] };
-  const s = R.seasonRanking([t1, t2, t3, t4], members, clubs, 2026);
-  assert.deepEqual(s.map(r => [r.name, r.points, r.rank, r.wins]), [['박민수', 18, 1, 1], ['김철수', 18, 2, 1]]);
-  assert.equal(R.pointsForRank(1), 10);
-  assert.equal(R.pointsForRank(9), 1);
-  assert.equal(R.pointsForRank(2, [5, 3]), 3);
-  assert.equal(R.pointsForRank(0), 0);
+test('team5 counts only when enabled', () => {
+  const res = R.regionStandings({ settings: { ...settings, countTeam5: true, points: { ...settings.points, team5: [7] } }, regions, players, teams });
+  assert.equal(res.standings.find(r => r.regionName === '서울').team5, 7);
 });
 
-test('final tournaments use stored results snapshot', () => {
-  const t = { id: 't', numGames: 1, status: 'final', handicap: { type: 'none' },
-    entries: [{ memberId: 'm1', games: [100] }],
-    results: { individual: [{ memberId: 'm1', name: '김철수', rank: 7, total: 999, scratch: 999, gamesPlayed: 1, games: [999], high: 999, avgGame: 999, gender: 'M', clubId: 'c1', handicap: 0 }], male: [{ memberId: 'm1', rank: 7 }], female: [], club: [], highGame: [], divisions: {} } };
-  const h = R.memberHistory('m1', [t], members, clubs);
-  assert.equal(h[0].rank, 7);
-  assert.equal(h[0].total, 999);
+test('resultsOf uses snapshot when final', () => {
+  const snap = { standings: [{ regionName: 'X', rank: 1 }] };
+  assert.equal(R.resultsOf({ settings: { ...settings, status: 'final' }, results: snap, regions, players, teams }), snap);
+  assert.notEqual(R.resultsOf({ settings, results: snap, regions, players, teams }), snap);
 });
 
-test('memberHistory and memberStats', () => {
-  const rule0 = { type: 'none' };
-  const t1 = { id: 't1', name: 'A', date: '2026-03-01', status: 'final', numGames: 2, handicap: rule0, entries: [{ memberId: 'm1', games: [200, 180] }, { memberId: 'm3', games: [150, 150] }] };
-  const t2 = { id: 't2', name: 'B', date: '2026-05-01', status: 'final', numGames: 2, handicap: rule0, entries: [{ memberId: 'm1', games: [120, 130] }, { memberId: 'm3', games: [150, 150] }] };
-  const h = R.memberHistory('m1', [t1, t2], members, clubs);
-  assert.equal(h.length, 2);
-  assert.equal(h[0].name, 'B'); // newest first
-  assert.equal(h[0].rank, 2);
-  assert.equal(h[1].rank, 1);
-  assert.equal(h[1].clubRank, 1);
-  assert.equal(h[1].genderRank, 1);
-  const s = R.memberStats(h);
-  assert.equal(s.tournaments, 2);
-  assert.equal(s.games, 4);
-  assert.equal(s.avgGame, 157.5);
-  assert.equal(s.high, 200);
-  assert.equal(s.low, 120);
-  assert.equal(s.bestRank, 1);
-  assert.equal(s.wins, 1);
-  assert.equal(s.podiums, 2);
-  assert.equal(s.points, 18);
+test('progress counts completed inputs', () => {
+  const p = R.progress({ settings, regions, players, teams });
+  assert.deepEqual(p.individual, { total: 6, done: 5 });
+  assert.deepEqual(p.scotch, { total: 2, done: 2 });
+  assert.deepEqual(p.team5, { total: 1, done: 1 });
 });

@@ -1,299 +1,223 @@
 /**
- * ranking.js - 전국대회 순위 집계 엔진 (순수 함수, 브라우저/Node 공용)
+ * ranking.js - 대회 순위 집계 엔진 (순수 함수, 브라우저/Node 공용)
  *
- * 용어
- *  - 에버(avg)     : 회원의 기준 평균 점수
- *  - 핸디(handicap): 게임당 핸디캡 핀 수
- *  - 스크래치      : 핸디 없이 실제 친 점수 합계
- *  - 총점(total)   : 스크래치 + 핸디 × 게임수
+ * 종목
+ *  - individual : 개인전 3게임 (남/여 각각 순위)
+ *  - scotch     : 스카치 더블 (남1 여1, 2게임)
+ *  - baker      : 베이커 (3인, 2게임)
+ *  - team5      : 지역 대표 5인조 (1게임, 이벤트)
+ *
+ * 지역 종합 포인트
+ *  - 개인전 남/여 상위 N명 순위 포인트
+ *  - 지역 대표(repCount명) 개인전 점수 합계 → 지역 순위 포인트
+ *  - 스카치 / 베이커 상위 팀 순위 포인트
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.Ranking = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
 
-  const DEFAULT_HANDICAP = { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 };
-  const DEFAULT_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
-  const PARTICIPATION_POINT = 1;
+  const EVENTS = {
+    individual: { key: 'individual', name: '개인전', games: 3, size: 1 },
+    scotch: { key: 'scotch', name: '스카치 더블', games: 2, size: 2 },
+    baker: { key: 'baker', name: '베이커', games: 2, size: 3 },
+    team5: { key: 'team5', name: '지역 대표 5인조', games: 1, size: 5 }
+  };
+
+  const DEFAULT_SETTINGS = {
+    name: '전국대회', venue: '', dates: ['', ''], lanes: 20, laneFrom: 1,
+    status: 'ready', // ready | live | final
+    handicap: { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 },
+    basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
+    teamHandicap: { scotch: 'avg', baker: 'avg', team5: 'none' }, // avg | sum | none
+    games: { individual: 3, scotch: 2, baker: 2, team5: 1 },
+    groups: [{ id: 'A', name: '1조', day: 1, time: '' }, { id: 'B', name: '2조', day: 1, time: '' }, { id: 'C', name: '3조', day: 2, time: '' }],
+    perLane: 4,
+    repCount: 3,
+    points: { individual: [5, 4, 3, 2, 1], reps: [5, 4, 3, 2, 1], scotch: [3, 2, 1], baker: [3, 2, 1] },
+    countTeam5: false
+  };
 
   function num(v, d = 0) { const n = Number(v); return Number.isFinite(n) ? n : d; }
+  function mergeSettings(s) {
+    const d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    if (!s) return d;
+    const out = { ...d, ...s };
+    ['handicap', 'teamHandicap', 'games', 'points'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
+    if (!Array.isArray(out.groups) || !out.groups.length) out.groups = d.groups;
+    return out;
+  }
 
-  /** 게임당 핸디캡 계산 */
+  /** 게임당 개인 핸디 */
   function calcHandicap(avg, gender, rule) {
-    rule = rule || DEFAULT_HANDICAP;
+    rule = rule || DEFAULT_SETTINGS.handicap;
     if (!rule || rule.type === 'none') return 0;
     let h = 0;
     if (rule.type === 'diff') {
-      const base = num(rule.base);
       const rate = rule.rate === '' || rule.rate == null ? 1 : num(rule.rate, 1);
-      h = Math.floor(Math.max(0, base - num(avg)) * rate);
+      h = Math.floor(Math.max(0, num(rule.base) - num(avg)) * rate);
       if (rule.cap !== '' && rule.cap != null) h = Math.min(h, num(rule.cap));
     }
     if (gender === 'F' && rule.femaleBonus) h += num(rule.femaleBonus);
     return h;
   }
 
-  /** 에버 기준 부(division) 배정. divisions: [{name, min}] */
-  function assignDivision(avg, divisions) {
-    if (!Array.isArray(divisions) || divisions.length === 0) return '';
-    const sorted = [...divisions].sort((a, b) => num(b.min) - num(a.min));
-    for (const d of sorted) if (num(avg) >= num(d.min)) return d.name;
-    return sorted[sorted.length - 1].name;
+  function playerHandicap(p, rule) {
+    if (p.handicapOverride != null && p.handicapOverride !== '') return num(p.handicapOverride);
+    return calcHandicap(p.avg, p.gender, rule);
   }
 
-  /**
-   * 정렬 키 기반 비교기 생성.
-   * keys: 내림차순으로 비교할 숫자 키 함수 목록. 모든 키가 같으면 동순위(0).
-   * 표시 순서는 이름(가나다)으로 안정화하지만 순위 판정에는 쓰지 않는다.
-   */
   function makeComparator(keys, nameKey) {
     nameKey = nameKey || (r => r.name);
-    const cmp = (a, b) => {
-      for (const k of keys) { const d = num(k(b)) - num(k(a)); if (d) return d; }
-      return 0;
-    };
+    const cmp = (a, b) => { for (const k of keys) { const d = num(k(b)) - num(k(a)); if (d) return d; } return 0; };
     const sortCmp = (a, b) => cmp(a, b) || String(nameKey(a)).localeCompare(String(nameKey(b)), 'ko');
     sortCmp.tie = cmp;
     return sortCmp;
   }
 
-  /** 개인 순위 비교 (총점 → 스크래치 → 하이게임 → 마지막 게임) */
-  const compareRows = makeComparator([r => r.total, r => r.scratch, r => r.high, r => r.lastGame]);
-
-  /** 정렬된 배열에 rank 부여 (동점은 같은 순위, 다음 순위 건너뜀) */
+  /** 정렬 + 순위 부여 (완전 동점은 공동 순위, 다음 순위 건너뜀) */
   function assignRanks(rows, cmp) {
-    cmp = cmp || compareRows;
     const tie = cmp.tie || cmp;
     rows.sort(cmp);
     let rank = 0;
-    rows.forEach((r, i) => {
-      if (i === 0 || tie(rows[i - 1], r) !== 0) rank = i + 1;
-      r.rank = rank;
-    });
+    rows.forEach((r, i) => { if (i === 0 || tie(rows[i - 1], r) !== 0) rank = i + 1; r.rank = rank; });
     return rows;
   }
 
-  /** 대회 참가자 → 개인 성적 행 생성 (순위 미부여) */
-  function buildRows(tournament, members, clubs) {
-    const mMap = new Map((members || []).map(m => [m.id, m]));
-    const cMap = new Map((clubs || []).map(c => [c.id, c]));
-    const numGames = num(tournament.numGames, 3);
-    const rule = tournament.handicap || DEFAULT_HANDICAP;
+  function gameStats(games, n) {
+    const arr = [];
+    for (let i = 0; i < n; i++) { const g = (games || [])[i]; arr.push(g === '' || g == null ? null : num(g)); }
+    const played = arr.filter(g => g != null);
+    const scratch = played.reduce((s, g) => s + g, 0);
+    return { games: arr, gamesPlayed: played.length, scratch, high: played.length ? Math.max(...played) : 0, lastGame: played.length ? played[played.length - 1] : 0 };
+  }
 
-    return (tournament.entries || []).map(e => {
-      const m = mMap.get(e.memberId) || {};
-      const club = cMap.get(e.clubId || m.clubId) || {};
-      const avg = e.avg != null && e.avg !== '' ? num(e.avg) : num(m.avg);
-      const gender = e.gender || m.gender || 'M';
-      const games = [];
-      for (let i = 0; i < numGames; i++) {
-        const g = (e.games || [])[i];
-        games.push(g === '' || g == null ? null : num(g));
-      }
-      const played = games.filter(g => g != null);
-      const scratch = played.reduce((s, g) => s + g, 0);
-      const handicap = e.handicapOverride != null && e.handicapOverride !== ''
-        ? num(e.handicapOverride) : calcHandicap(avg, gender, rule);
+  // ===== 개인전 =====
+  function playerRows(players, regions, settings) {
+    const s = mergeSettings(settings);
+    const rMap = new Map((regions || []).map(r => [r.id, r]));
+    const n = num(s.games.individual, 3);
+    return (players || []).map(p => {
+      const g = gameStats(p.games, n);
+      const handicap = playerHandicap(p, s.handicap);
+      const region = rMap.get(p.regionId) || {};
+      const total = g.scratch + handicap * g.gamesPlayed;
       return {
-        memberId: e.memberId,
-        name: e.name || m.name || '(미상)',
-        clubId: club.id || e.clubId || m.clubId || '',
-        clubName: club.name || e.clubName || '',
-        gender,
-        avg,
-        lane: e.lane || '',
-        division: e.division || assignDivision(avg, tournament.divisions),
-        games,
-        gamesPlayed: played.length,
-        scratch,
-        handicap,
-        handicapTotal: handicap * played.length,
-        total: scratch + handicap * played.length,
-        high: played.length ? Math.max(...played) : 0,
-        lastGame: played.length ? played[played.length - 1] : 0,
-        avgGame: played.length ? Math.round((scratch / played.length) * 10) / 10 : 0
+        playerId: p.id, name: p.name, regionId: p.regionId, regionName: region.name || '(미정)', gender: p.gender === 'F' ? 'F' : 'M',
+        avg: num(p.avg), handicap, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
+        ...g, total, score: s.basis === 'scratch' ? g.scratch : total,
+        avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0
       };
     });
   }
 
-  /** 개인 종합 순위 */
-  function individualRanking(tournament, members, clubs) {
-    return assignRanks(buildRows(tournament, members, clubs));
+  const cmpIndividual = makeComparator([r => r.score, r => r.total, r => r.scratch, r => r.high, r => r.lastGame]);
+
+  function individualRanking(rows, filter) {
+    const list = rows.filter(r => r.gamesPlayed > 0 || true).filter(filter || (() => true)).map(r => ({ ...r }));
+    return assignRanks(list, cmpIndividual);
   }
 
-  /** 부분 집합 순위 (성별/부별) - 원본 rank는 유지하고 subRank 부여 */
-  function subRanking(rows, predicate) {
-    const subset = rows.filter(predicate).map(r => ({ ...r }));
-    return assignRanks(subset);
+  // ===== 팀 종목 =====
+  function teamHandicapOf(memberRows, mode) {
+    if (!memberRows.length || mode === 'none') return 0;
+    const sum = memberRows.reduce((s, m) => s + m.handicap, 0);
+    return mode === 'sum' ? sum : Math.floor(sum / memberRows.length);
   }
 
-  /** 클럽 대항 순위: 클럽별 상위 N명 총점 합계 */
-  function clubRanking(rows, clubs, topN) {
-    topN = num(topN, 5);
-    const byClub = new Map();
-    rows.forEach(r => {
-      const key = r.clubId || '_none';
-      if (!byClub.has(key)) byClub.set(key, { clubId: r.clubId, clubName: r.clubName || '(무소속)', players: [] });
-      byClub.get(key).players.push(r);
-    });
-    const result = [...byClub.values()].map(c => {
-      const sorted = [...c.players].sort(compareRows);
-      const counted = topN > 0 ? sorted.slice(0, topN) : sorted;
-      const total = counted.reduce((s, r) => s + r.total, 0);
-      const scratch = counted.reduce((s, r) => s + r.scratch, 0);
-      const gamesPlayed = counted.reduce((s, r) => s + r.gamesPlayed, 0);
+  function teamRows(teams, event, pRows, regions, settings) {
+    const s = mergeSettings(settings);
+    const pMap = new Map(pRows.map(r => [r.playerId, r]));
+    const rMap = new Map((regions || []).map(r => [r.id, r]));
+    const n = num(s.games[event], EVENTS[event].games);
+    return (teams || []).filter(t => t.event === event).map(t => {
+      const members = (t.members || []).map(id => pMap.get(id)).filter(Boolean);
+      const region = rMap.get(t.regionId) || {};
+      const handicap = teamHandicapOf(members, s.teamHandicap[event] || 'none');
+      const g = gameStats(t.games, n);
+      const memberNames = members.map(m => m.name);
       return {
-        clubId: c.clubId,
-        clubName: c.clubName,
-        entries: c.players.length,
-        counted: counted.length,
-        short: topN > 0 && counted.length < topN,
-        total,
-        scratch,
-        avgGame: gamesPlayed ? Math.round((scratch / gamesPlayed) * 10) / 10 : 0,
-        top: counted.map(r => ({ name: r.name, total: r.total }))
+        teamId: t.id, event, regionId: t.regionId, regionName: region.name || '(미정)',
+        name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
+        lane: t.lane || '', handicap, ...g, total: g.scratch + handicap * g.gamesPlayed,
+        avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
+        valid: members.length === EVENTS[event].size
       };
     });
-    return assignRanks(result, makeComparator([c => c.total, c => c.scratch, c => c.avgGame], c => c.clubName));
   }
 
-  /** 하이게임 순위 (단일 게임 최고점) */
-  function highGameRanking(rows) {
-    const list = rows.filter(r => r.gamesPlayed > 0).map(r => ({ ...r }));
-    return assignRanks(list, makeComparator([r => r.high, r => r.scratch]));
+  const cmpTeam = makeComparator([r => r.total, r => r.scratch, r => r.high, r => r.lastGame]);
+  function teamRanking(rows) { return assignRanks(rows.map(r => ({ ...r })), cmpTeam); }
+
+  // ===== 지역 대표 =====
+  function repRanking(pRows, regions, settings) {
+    const s = mergeSettings(settings);
+    const byRegion = new Map();
+    (regions || []).forEach(r => byRegion.set(r.id, { regionId: r.id, regionName: r.name, reps: [], score: 0, scratch: 0, count: 0, short: true }));
+    pRows.filter(r => r.isRep).forEach(r => {
+      if (!byRegion.has(r.regionId)) byRegion.set(r.regionId, { regionId: r.regionId, regionName: r.regionName, reps: [], score: 0, scratch: 0, count: 0, short: true });
+      const a = byRegion.get(r.regionId);
+      a.reps.push({ name: r.name, score: r.score, total: r.total, scratch: r.scratch, gamesPlayed: r.gamesPlayed });
+      a.score += r.score; a.scratch += r.scratch; a.count += 1;
+    });
+    const rows = [...byRegion.values()].map(a => ({ ...a, short: a.count < num(s.repCount, 3), over: a.count > num(s.repCount, 3) }));
+    return assignRanks(rows, makeComparator([r => r.score, r => r.scratch], r => r.regionName));
   }
 
-  /** 대회 결과 전체 집계 */
-  function computeResults(tournament, members, clubs) {
-    const individual = individualRanking(tournament, members, clubs);
-    const topN = tournament.clubScoring && tournament.clubScoring.topN != null ? tournament.clubScoring.topN : 5;
-    const divisions = {};
-    (tournament.divisions || []).forEach(d => { divisions[d.name] = subRanking(individual, r => r.division === d.name); });
-    return {
-      individual,
-      male: subRanking(individual, r => r.gender !== 'F'),
-      female: subRanking(individual, r => r.gender === 'F'),
-      divisions,
-      club: clubRanking(individual, clubs, topN),
-      highGame: highGameRanking(individual),
-      computedAt: new Date().toISOString()
-    };
-  }
-
-  /** 확정된 대회는 스냅샷, 아니면 실시간 계산 */
-  function resultsOf(tournament, members, clubs) {
-    if (tournament.status === 'final' && tournament.results && tournament.results.individual) return tournament.results;
-    return computeResults(tournament, members, clubs);
-  }
-
-  /** 순위 → 시즌 포인트 */
+  // ===== 포인트 =====
   function pointsForRank(rank, table) {
-    table = Array.isArray(table) && table.length ? table : DEFAULT_POINTS;
-    if (!rank || rank < 1) return 0;
-    return rank <= table.length ? num(table[rank - 1]) : PARTICIPATION_POINT;
+    if (!rank || rank < 1 || !Array.isArray(table)) return 0;
+    return rank <= table.length ? num(table[rank - 1]) : 0;
   }
 
-  /** 시즌(연도) 랭킹: 포인트 합산 */
-  function seasonRanking(tournaments, members, clubs, year, pointsTable) {
-    const list = (tournaments || []).filter(t => t.status === 'final' && (!year || String(t.date || '').startsWith(String(year))));
+  /** 지역 종합 집계 */
+  function regionStandings(data) {
+    const s = mergeSettings(data.settings);
+    const regions = data.regions || [];
+    const pRows = playerRows(data.players, regions, s);
+    const male = individualRanking(pRows, r => r.gender === 'M');
+    const female = individualRanking(pRows, r => r.gender === 'F');
+    const scotch = teamRanking(teamRows(data.teams, 'scotch', pRows, regions, s));
+    const baker = teamRanking(teamRows(data.teams, 'baker', pRows, regions, s));
+    const team5 = teamRanking(teamRows(data.teams, 'team5', pRows, regions, s));
+    const reps = repRanking(pRows, regions, s);
+
     const acc = new Map();
-    list.forEach(t => {
-      const res = resultsOf(t, members, clubs);
-      res.individual.forEach(r => {
-        if (!acc.has(r.memberId)) acc.set(r.memberId, { memberId: r.memberId, name: r.name, clubName: r.clubName, gender: r.gender, points: 0, tournaments: 0, games: 0, scratch: 0, high: 0, best: null, wins: 0 });
-        const a = acc.get(r.memberId);
-        a.points += pointsForRank(r.rank, pointsTable);
-        a.tournaments += 1;
-        a.games += r.gamesPlayed;
-        a.scratch += r.scratch;
-        a.high = Math.max(a.high, r.high);
-        a.best = a.best == null ? r.rank : Math.min(a.best, r.rank);
-        if (r.rank === 1) a.wins += 1;
-      });
-    });
-    const rows = [...acc.values()].map(a => ({ ...a, avgGame: a.games ? Math.round((a.scratch / a.games) * 10) / 10 : 0 }));
-    return assignRanks(rows, makeComparator([r => r.points, r => r.wins, r => r.avgGame]));
-  }
-
-  /** 시즌 클럽 랭킹: 대회별 클럽 순위 포인트 합산 */
-  function seasonClubRanking(tournaments, members, clubs, year, pointsTable) {
-    const list = (tournaments || []).filter(t => t.status === 'final' && (!year || String(t.date || '').startsWith(String(year))));
-    const acc = new Map();
-    list.forEach(t => {
-      const res = resultsOf(t, members, clubs);
-      res.club.forEach(c => {
-        const key = c.clubId || '_none';
-        if (!acc.has(key)) acc.set(key, { clubId: c.clubId, clubName: c.clubName, points: 0, tournaments: 0, wins: 0, total: 0 });
-        const a = acc.get(key);
-        a.points += pointsForRank(c.rank, pointsTable);
-        a.tournaments += 1;
-        a.total += c.total;
-        if (c.rank === 1) a.wins += 1;
-      });
-    });
-    return assignRanks([...acc.values()], makeComparator([c => c.points, c => c.wins, c => c.total], c => c.clubName));
-  }
-
-  /** 회원 개인 대회 이력 */
-  function memberHistory(memberId, tournaments, members, clubs) {
-    const out = [];
-    (tournaments || []).forEach(t => {
-      if (!(t.entries || []).some(e => e.memberId === memberId)) return;
-      const res = resultsOf(t, members, clubs);
-      const row = res.individual.find(r => r.memberId === memberId);
-      if (!row) return;
-      const clubRow = res.club.find(c => c.clubId === row.clubId);
-      const genderRow = (row.gender === 'F' ? res.female : res.male).find(r => r.memberId === memberId);
-      out.push({
-        tournamentId: t.id,
-        name: t.name,
-        date: t.date,
-        status: t.status,
-        games: row.games,
-        gamesPlayed: row.gamesPlayed,
-        scratch: row.scratch,
-        handicap: row.handicap,
-        total: row.total,
-        high: row.high,
-        avgGame: row.avgGame,
-        rank: row.rank,
-        entries: res.individual.length,
-        genderRank: genderRow ? genderRow.rank : null,
-        genderEntries: (row.gender === 'F' ? res.female : res.male).length,
-        clubRank: clubRow ? clubRow.rank : null,
-        clubCount: res.club.length,
-        division: row.division,
-        points: t.status === 'final' ? pointsForRank(row.rank) : 0
-      });
-    });
-    out.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-    return out;
-  }
-
-  /** 이력 → 개인 통계 */
-  function memberStats(history) {
-    const done = history.filter(h => h.gamesPlayed > 0);
-    const games = done.reduce((s, h) => s + h.gamesPlayed, 0);
-    const scratch = done.reduce((s, h) => s + h.scratch, 0);
-    const allGames = done.flatMap(h => h.games.filter(g => g != null));
-    return {
-      tournaments: history.length,
-      games,
-      avgGame: games ? Math.round((scratch / games) * 10) / 10 : 0,
-      high: allGames.length ? Math.max(...allGames) : 0,
-      low: allGames.length ? Math.min(...allGames) : 0,
-      bestRank: done.length ? Math.min(...done.map(h => h.rank)) : null,
-      wins: done.filter(h => h.rank === 1 && h.status === 'final').length,
-      podiums: done.filter(h => h.rank <= 3 && h.status === 'final').length,
-      points: history.reduce((s, h) => s + (h.points || 0), 0)
+    regions.forEach(r => acc.set(r.id, { regionId: r.id, regionName: r.name, male: 0, female: 0, reps: 0, scotch: 0, baker: 0, team5: 0, total: 0, details: [] }));
+    const add = (regionId, field, pts, detail) => {
+      if (!pts || !acc.has(regionId)) return;
+      const a = acc.get(regionId); a[field] += pts; a.total += pts; a.details.push({ field, pts, ...detail });
     };
+    male.forEach(r => add(r.regionId, 'male', pointsForRank(r.rank, s.points.individual), { event: '개인전 남자', who: r.name, rank: r.rank }));
+    female.forEach(r => add(r.regionId, 'female', pointsForRank(r.rank, s.points.individual), { event: '개인전 여자', who: r.name, rank: r.rank }));
+    reps.forEach(r => add(r.regionId, 'reps', pointsForRank(r.rank, s.points.reps), { event: '지역 대표', who: r.reps.map(x => x.name).join('·'), rank: r.rank }));
+    scotch.forEach(r => add(r.regionId, 'scotch', pointsForRank(r.rank, s.points.scotch), { event: '스카치', who: r.name, rank: r.rank }));
+    baker.forEach(r => add(r.regionId, 'baker', pointsForRank(r.rank, s.points.baker), { event: '베이커', who: r.name, rank: r.rank }));
+    if (s.countTeam5 && Array.isArray(s.points.team5)) team5.forEach(r => add(r.regionId, 'team5', pointsForRank(r.rank, s.points.team5), { event: '5인조', who: r.name, rank: r.rank }));
+
+    const standings = assignRanks([...acc.values()], makeComparator([r => r.total, r => r.male + r.female, r => r.reps], r => r.regionName));
+    return { settings: s, playerRows: pRows, male, female, scotch, baker, team5, reps, standings, computedAt: new Date().toISOString() };
   }
 
-  return {
-    DEFAULT_HANDICAP, DEFAULT_POINTS, PARTICIPATION_POINT,
-    calcHandicap, assignDivision, makeComparator, compareRows, assignRanks, buildRows,
-    individualRanking, subRanking, clubRanking, highGameRanking,
-    computeResults, resultsOf, pointsForRank, seasonRanking, seasonClubRanking,
-    memberHistory, memberStats
-  };
+  /** 확정된 대회는 스냅샷 사용 */
+  function resultsOf(data) {
+    if (data.settings && data.settings.status === 'final' && data.results && data.results.standings) return data.results;
+    return regionStandings(data);
+  }
+
+  /** 입력 진행률 */
+  function progress(data) {
+    const s = mergeSettings(data.settings);
+    const ind = (data.players || []).filter(p => p.events ? p.events.individual !== false : true);
+    const indDone = ind.filter(p => gameStats(p.games, s.games.individual).gamesPlayed === num(s.games.individual, 3)).length;
+    const ev = {};
+    ['scotch', 'baker', 'team5'].forEach(e => {
+      const ts = (data.teams || []).filter(t => t.event === e);
+      ev[e] = { total: ts.length, done: ts.filter(t => gameStats(t.games, s.games[e]).gamesPlayed === num(s.games[e], 1)).length };
+    });
+    return { individual: { total: ind.length, done: indDone }, ...ev };
+  }
+
+  return { EVENTS, DEFAULT_SETTINGS, mergeSettings, calcHandicap, playerHandicap, makeComparator, assignRanks, gameStats,
+    playerRows, individualRanking, teamHandicapOf, teamRows, teamRanking, repRanking, pointsForRank, regionStandings, resultsOf, progress };
 });

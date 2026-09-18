@@ -1,54 +1,50 @@
 /**
- * store.js - 데이터 저장/조회 계층
+ * store.js - 데이터 저장/조회 계층 (이번 대회 전용)
  *
  *  - 로컬 모드 : 브라우저 localStorage (데모/단일 기기용). API URL 미설정 시 자동.
- *  - 조회는 로그인 없이 가능하며, 수정은 관리자 PIN 로그인 후에만 허용된다.
  *  - 서버 모드 : Google Apps Script 웹앱 (gas/Code.gs) + Google Sheets. 설정 탭에서 URL 입력.
+ *  - 조회는 로그인 없이 가능하며, 수정은 관리자 PIN 로그인 후에만 허용된다.
  *
- * 두 모드 모두 동일한 비동기 API를 제공하므로 app.js는 모드를 구분하지 않는다.
+ * 데이터: { settings, regions[], players[], teams[], results }
  */
 const Store = (() => {
-  // 배포 시 여기에 Apps Script 웹앱 URL을 넣어두면 설정 없이 서버 모드로 동작
-  const DEFAULT_API_URL = '';
-
-  const LS = { data: 'nt_data_v1', api: 'nt_api_url', auth: 'nt_auth_v1' };
+  const DEFAULT_API_URL = ''; // 배포 시 Apps Script 웹앱 URL을 넣으면 설정 없이 서버 모드
+  const LS = { data: 'bf_data_v1', api: 'bf_api_url', auth: 'bf_auth_v1' };
 
   function lsGet(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota */ } }
   function lsDel(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
-
   function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
   let apiUrl = (lsGet(LS.api) || DEFAULT_API_URL || '').trim();
   let auth = lsGet(LS.auth);
-  let cache = null; // 마지막으로 불러온 전체 데이터 (읽기 전용 스냅샷)
-
   function mode() { return apiUrl ? 'remote' : 'local'; }
+  function isAdmin() { return !!(auth && auth.role === 'admin'); }
+  function requireAdmin() { if (!isAdmin()) throw new Error('관리자 로그인이 필요합니다.'); }
 
-  // ===== 로컬 모드 =====
+  // ===== 로컬 =====
+  function emptyData() { return { settings: { ...Ranking.DEFAULT_SETTINGS, adminPin: '0000' }, regions: [], players: [], teams: [], results: null }; }
   function localLoad() {
     let d = lsGet(LS.data);
-    if (!d || !Array.isArray(d.members)) { d = SampleData.build(); lsSet(LS.data, d); }
-    d.settings = Object.assign({ orgName: '전국 볼링 클럽 연합', adminPin: '0000', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP }, d.settings || {});
+    if (!d || !Array.isArray(d.players)) { d = SampleData.build(); lsSet(LS.data, d); }
+    d.settings = { ...Ranking.mergeSettings(d.settings), adminPin: (d.settings && d.settings.adminPin) || '0000' };
+    d.regions = d.regions || []; d.teams = d.teams || []; d.players = d.players || [];
     return d;
   }
   function localSave(d) { lsSet(LS.data, d); }
-
-  // 연락처는 관리자에게만 노출
-  function publicMember(m) { const { phone, ...rest } = m; return rest; }
   function publicSettings(s) { const { adminPin, ...rest } = s; return rest; }
-  function publicView(d) {
-    const admin = auth && auth.role === 'admin';
-    return { clubs: clone(d.clubs || []), members: (d.members || []).map(m => admin ? clone(m) : publicMember(m)), tournaments: clone(d.tournaments || []), settings: publicSettings(d.settings || {}) };
+  function publicView(d) { return { settings: publicSettings(d.settings), regions: clone(d.regions), players: clone(d.players), teams: clone(d.teams), results: d.results ? clone(d.results) : null }; }
+  function upsert(list, item, idPrefix) {
+    if (!item.id) item.id = uid(idPrefix);
+    const i = list.findIndex(x => x.id === item.id);
+    if (i >= 0) list[i] = { ...list[i], ...item }; else list.push(item);
+    return list;
   }
 
-  function requireAdmin() { if (!auth || auth.role !== 'admin') throw new Error('관리자 권한이 필요합니다.'); }
-
-  // ===== 서버 모드 =====
+  // ===== 서버 =====
   async function gasGet(action, params) {
-    const q = new URLSearchParams({ action, ...(params || {}) });
-    const res = await fetch(apiUrl + '?' + q.toString());
+    const res = await fetch(apiUrl + '?' + new URLSearchParams({ action, ...(params || {}) }).toString());
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     return data;
@@ -56,36 +52,15 @@ const Store = (() => {
   async function gasPost(body) {
     const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ ...body, token: auth ? auth.token : '' }) });
     const data = await res.json();
-    if (data.error) {
-      if (/토큰|token|로그인/.test(data.error)) { auth = null; lsDel(LS.auth); }
-      throw new Error(data.error);
-    }
+    if (data.error) { if (/토큰|로그인/.test(data.error)) { auth = null; lsDel(LS.auth); } throw new Error(data.error); }
     return data;
   }
 
-  function setCache(d) { cache = d; return d; }
-
-  // ===== 공개 API =====
   return {
-    mode,
+    mode, isAdmin, uid,
     getApiUrl() { return apiUrl; },
-    setApiUrl(url) {
-      apiUrl = (url || '').trim();
-      if (apiUrl) lsSet(LS.api, apiUrl); else lsDel(LS.api);
-      auth = null; lsDel(LS.auth); cache = null;
-    },
-    session() { return auth; },
-    cached() { return cache; },
-    uid,
+    setApiUrl(url) { apiUrl = (url || '').trim(); if (apiUrl) lsSet(LS.api, apiUrl); else lsDel(LS.api); auth = null; lsDel(LS.auth); },
 
-    /** 전체 데이터 로드 (회원 PIN 제외) */
-    async loadAll() {
-      if (mode() === 'local') return setCache(publicView(localLoad()));
-      const r = await gasGet('getAll', auth && auth.token ? { token: auth.token } : {});
-      return setCache({ clubs: r.clubs || [], members: r.members || [], tournaments: r.tournaments || [], settings: r.settings || {} });
-    },
-
-    /** 관리자 로그인 (조회는 로그인 없이 가능) */
     async login(pin) {
       if (mode() === 'local') {
         const d = localLoad();
@@ -95,118 +70,103 @@ const Store = (() => {
         const r = await gasPost({ action: 'login', pin });
         auth = { role: 'admin', token: r.token };
       }
-      lsSet(LS.auth, auth);
-      return auth;
+      lsSet(LS.auth, auth); return auth;
     },
-    isAdmin() { return !!(auth && auth.role === 'admin'); },
     logout() { auth = null; lsDel(LS.auth); },
 
-    // ----- 클럽 -----
-    async saveClub(club) {
-      requireAdmin();
-      if (!club.id) club.id = uid('c');
-      if (mode() === 'local') {
-        const d = localLoad(); const i = d.clubs.findIndex(c => c.id === club.id);
-        if (i >= 0) d.clubs[i] = { ...d.clubs[i], ...club }; else d.clubs.push(club);
-        localSave(d); return clone(d.clubs);
-      }
-      return (await gasPost({ action: 'saveClub', club })).clubs;
-    },
-    async deleteClub(id) {
-      requireAdmin();
-      if (mode() === 'local') {
-        const d = localLoad();
-        if (d.members.some(m => m.clubId === id)) throw new Error('소속 회원이 있는 클럽은 삭제할 수 없습니다.');
-        d.clubs = d.clubs.filter(c => c.id !== id); localSave(d); return clone(d.clubs);
-      }
-      return (await gasPost({ action: 'deleteClub', id })).clubs;
-    },
-
-    // ----- 회원 -----
-    async saveMember(member) {
-      requireAdmin();
-      if (!member.id) member.id = uid('m');
-      if (mode() === 'local') {
-        const d = localLoad(); const i = d.members.findIndex(m => m.id === member.id);
-        const dup = d.members.find(m => m.id !== member.id && m.clubId === member.clubId && m.name === member.name);
-        if (dup) throw new Error('같은 클럽에 동명 회원이 이미 있습니다.');
-        if (i >= 0) d.members[i] = { ...d.members[i], ...member }; else d.members.push(member);
-        localSave(d); return clone(d.members);
-      }
-      return (await gasPost({ action: 'saveMember', member })).members;
-    },
-    async saveMembersBulk(list) {
-      requireAdmin();
-      if (mode() === 'local') {
-        const d = localLoad();
-        list.forEach(member => {
-          const ex = d.members.find(m => m.clubId === member.clubId && m.name === member.name);
-          if (ex) Object.assign(ex, { gender: member.gender || ex.gender, avg: member.avg != null ? member.avg : ex.avg, phone: member.phone || ex.phone });
-          else d.members.push({ id: uid('m'), phone: '', joinDate: '', note: '', ...member });
-        });
-        localSave(d); return clone(d.members);
-      }
-      return (await gasPost({ action: 'saveMembersBulk', members: list })).members;
-    },
-    async deleteMember(id) {
-      requireAdmin();
-      if (mode() === 'local') {
-        const d = localLoad(); d.members = d.members.filter(m => m.id !== id); localSave(d); return clone(d.members);
-      }
-      return (await gasPost({ action: 'deleteMember', id })).members;
-    },
-    // ----- 대회 -----
-    async saveTournament(t) {
-      requireAdmin();
-      if (!t.id) t.id = uid('t');
-      if (mode() === 'local') {
-        const d = localLoad(); const i = d.tournaments.findIndex(x => x.id === t.id);
-        if (i >= 0) d.tournaments[i] = t; else d.tournaments.push(t);
-        localSave(d); return clone(d.tournaments);
-      }
-      return (await gasPost({ action: 'saveTournament', tournament: t })).tournaments;
-    },
-    async deleteTournament(id) {
-      requireAdmin();
-      if (mode() === 'local') {
-        const d = localLoad(); d.tournaments = d.tournaments.filter(t => t.id !== id); localSave(d); return clone(d.tournaments);
-      }
-      return (await gasPost({ action: 'deleteTournament', id })).tournaments;
+    async loadAll() {
+      if (mode() === 'local') return publicView(localLoad());
+      const r = await gasGet('getAll');
+      return { settings: Ranking.mergeSettings(r.settings), regions: r.regions || [], players: r.players || [], teams: r.teams || [], results: r.results || null };
     },
 
     // ----- 설정 -----
-    async saveSettings(s) {
+    async saveSettings(patch) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); Object.assign(d.settings, patch); localSave(d); return publicSettings(d.settings); }
+      return (await gasPost({ action: 'saveSettings', settings: patch })).settings;
+    },
+
+    // ----- 지역 -----
+    async saveRegion(region) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); upsert(d.regions, region, 'r'); localSave(d); return clone(d.regions); }
+      return (await gasPost({ action: 'saveRegion', region })).regions;
+    },
+    async deleteRegion(id) {
       requireAdmin();
       if (mode() === 'local') {
-        const d = localLoad(); Object.assign(d.settings, s); localSave(d); return publicSettings(d.settings);
+        const d = localLoad();
+        if (d.players.some(p => p.regionId === id)) throw new Error('소속 선수가 있는 지역은 삭제할 수 없습니다.');
+        d.regions = d.regions.filter(r => r.id !== id); d.teams = d.teams.filter(t => t.regionId !== id); localSave(d); return clone(d.regions);
       }
-      return (await gasPost({ action: 'saveSettings', settings: s })).settings;
+      return (await gasPost({ action: 'deleteRegion', id })).regions;
+    },
+
+    // ----- 선수 -----
+    async savePlayers(list) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); list.forEach(p => upsert(d.players, p, 'p')); localSave(d); return clone(d.players); }
+      return (await gasPost({ action: 'savePlayers', players: list })).players;
+    },
+    async savePlayer(p) { return this.savePlayers([p]); },
+    async deletePlayer(id) {
+      requireAdmin();
+      if (mode() === 'local') {
+        const d = localLoad(); d.players = d.players.filter(p => p.id !== id);
+        d.teams.forEach(t => { t.members = (t.members || []).filter(m => m !== id); });
+        localSave(d); return { players: clone(d.players), teams: clone(d.teams) };
+      }
+      const r = await gasPost({ action: 'deletePlayer', id }); return { players: r.players, teams: r.teams };
+    },
+    async replacePlayers(list) { // 신청서 업로드: 전체 교체
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); d.players = list.map(p => ({ ...p, id: p.id || uid('p') })); d.teams = []; localSave(d); return { players: clone(d.players), teams: [] }; }
+      const r = await gasPost({ action: 'replacePlayers', players: list }); return { players: r.players, teams: r.teams };
+    },
+
+    // ----- 팀 -----
+    async saveTeams(list) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); list.forEach(t => upsert(d.teams, t, 't')); localSave(d); return clone(d.teams); }
+      return (await gasPost({ action: 'saveTeams', teams: list })).teams;
+    },
+    async saveTeam(t) { return this.saveTeams([t]); },
+    async deleteTeam(id) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); d.teams = d.teams.filter(t => t.id !== id); localSave(d); return clone(d.teams); }
+      return (await gasPost({ action: 'deleteTeam', id })).teams;
+    },
+
+    // ----- 확정 -----
+    async finalize(results) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); d.results = results; d.settings.status = 'final'; localSave(d); return true; }
+      await gasPost({ action: 'finalize', results }); return true;
+    },
+    async unfinalize() {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); d.results = null; d.settings.status = 'live'; localSave(d); return true; }
+      await gasPost({ action: 'unfinalize' }); return true;
     },
 
     // ----- 백업 -----
     async exportAll() {
       requireAdmin();
-      if (mode() === 'local') { const d = localLoad(); return JSON.stringify({ ...d, exportDate: new Date().toISOString() }, null, 2); }
-      const r = await gasPost({ action: 'exportAll' });
-      return JSON.stringify({ ...r, exportDate: new Date().toISOString() }, null, 2);
+      const d = mode() === 'local' ? publicView(localLoad()) : await gasPost({ action: 'exportAll' });
+      return JSON.stringify({ ...d, exportDate: new Date().toISOString() }, null, 2);
     },
     async importAll(json) {
       requireAdmin();
       const d = JSON.parse(json);
-      if (!Array.isArray(d.members) || !Array.isArray(d.clubs)) throw new Error('올바른 백업 파일이 아닙니다.');
+      if (!Array.isArray(d.players) || !Array.isArray(d.regions)) throw new Error('올바른 백업 파일이 아닙니다.');
       if (mode() === 'local') {
         const cur = localLoad();
-        localSave({ clubs: d.clubs, members: d.members, tournaments: d.tournaments || [], settings: { ...cur.settings, ...(d.settings || {}) } });
+        localSave({ settings: { ...cur.settings, ...(d.settings || {}), adminPin: cur.settings.adminPin }, regions: d.regions, players: d.players, teams: d.teams || [], results: d.results || null });
         return true;
       }
-      await gasPost({ action: 'importAll', clubs: d.clubs, members: d.members, tournaments: d.tournaments || [], settings: d.settings || {} });
-      return true;
+      await gasPost({ action: 'importAll', data: { settings: d.settings || {}, regions: d.regions, players: d.players, teams: d.teams || [], results: d.results || null } }); return true;
     },
-    /** 로컬 데모 데이터 초기화 */
-    resetLocal(empty) {
-      requireAdmin();
-      if (empty) localSave({ clubs: [], members: [], tournaments: [], settings: { orgName: '전국 볼링 클럽 연합', adminPin: '0000', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP } });
-      else lsDel(LS.data);
-    }
+    resetLocal(empty) { requireAdmin(); if (empty) localSave(emptyData()); else lsDel(LS.data); }
   };
 })();

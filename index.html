@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🎳 전국대회 관리</title>
-  <link rel="stylesheet" href="css/style.css?v=1">
+  <title>🎳 볼링 페스타</title>
+  <link rel="stylesheet" href="css/style.css?v=2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎳</text></svg>">
 </head>
 <body>
-  <!-- 관리자 로그인 (모달) -->
   <div id="admin-modal" class="modal" style="display:none;">
     <form id="admin-form" class="modal-box" autocomplete="off">
       <h2>🔐 관리자 로그인</h2>
@@ -24,8 +23,8 @@
     <header>
       <div class="header-inner">
         <div>
-          <h1 id="header-org">🎳 전국 볼링 클럽 연합</h1>
-          <p class="subtitle">전국대회 관리 시스템</p>
+          <h1 id="header-title">🎳 전국대회</h1>
+          <p class="subtitle" id="header-sub"></p>
         </div>
         <div class="header-right">
           <span id="mode-badge" class="mode-badge"></span>
@@ -37,21 +36,25 @@
 
     <nav class="tabs" id="main-tabs">
       <button class="tab-btn active" data-tab="home">🏠 홈</button>
-      <button class="tab-btn" data-tab="tournaments">🏆 대회</button>
-      <button class="tab-btn" data-tab="player">👤 선수 조회</button>
-      <button class="tab-btn" data-tab="clubs">🏢 클럽</button>
-      <button class="tab-btn" data-tab="members">👥 회원</button>
-      <button class="tab-btn" data-tab="season">📈 시즌랭킹</button>
+      <button class="tab-btn" data-tab="players">👥 선수</button>
+      <button class="tab-btn" data-tab="assign">🎯 배정</button>
+      <button class="tab-btn" data-tab="individual">🎳 개인전</button>
+      <button class="tab-btn" data-tab="scotch">👫 스카치</button>
+      <button class="tab-btn" data-tab="baker">🤝 베이커</button>
+      <button class="tab-btn" data-tab="team5">🏁 5인조</button>
+      <button class="tab-btn" data-tab="standings">🏆 지역종합</button>
       <button class="tab-btn" data-tab="settings" data-role="admin">⚙️ 설정</button>
     </nav>
 
     <main>
       <section id="tab-home" class="tab-content active"></section>
-      <section id="tab-tournaments" class="tab-content"></section>
-      <section id="tab-player" class="tab-content"></section>
-      <section id="tab-clubs" class="tab-content"></section>
-      <section id="tab-members" class="tab-content"></section>
-      <section id="tab-season" class="tab-content"></section>
+      <section id="tab-players" class="tab-content"></section>
+      <section id="tab-assign" class="tab-content"></section>
+      <section id="tab-individual" class="tab-content"></section>
+      <section id="tab-scotch" class="tab-content"></section>
+      <section id="tab-baker" class="tab-content"></section>
+      <section id="tab-team5" class="tab-content"></section>
+      <section id="tab-standings" class="tab-content"></section>
       <section id="tab-settings" class="tab-content"></section>
     </main>
   </div>
@@ -59,9 +62,10 @@
   <div id="toast" class="toast"></div>
   <div id="loading" class="loading" style="display:none;"><div class="spinner"></div></div>
 
-  <script src="js/ranking.js?v=1"></script>
-  <script src="js/sample-data.js?v=1"></script>
-  <script src="js/store.js?v=1"></script>
-  <script src="js/app.js?v=1"></script>
+  <script src="js/ranking.js?v=2"></script>
+  <script src="js/lanes.js?v=2"></script>
+  <script src="js/sample-data.js?v=2"></script>
+  <script src="js/store.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>
