@@ -2,6 +2,7 @@
  * store.js - 데이터 저장/조회 계층
  *
  *  - 로컬 모드 : 브라우저 localStorage (데모/단일 기기용). API URL 미설정 시 자동.
+ *  - 조회는 로그인 없이 가능하며, 수정은 관리자 PIN 로그인 후에만 허용된다.
  *  - 서버 모드 : Google Apps Script 웹앱 (gas/Code.gs) + Google Sheets. 설정 탭에서 URL 입력.
  *
  * 두 모드 모두 동일한 비동기 API를 제공하므로 app.js는 모드를 구분하지 않는다.
@@ -29,22 +30,20 @@ const Store = (() => {
   function localLoad() {
     let d = lsGet(LS.data);
     if (!d || !Array.isArray(d.members)) { d = SampleData.build(); lsSet(LS.data, d); }
-    d.settings = Object.assign({ orgName: '전국 볼링 클럽 연합', adminPin: '0000', defaultPin: '1234', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP }, d.settings || {});
+    d.settings = Object.assign({ orgName: '전국 볼링 클럽 연합', adminPin: '0000', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP }, d.settings || {});
     return d;
   }
   function localSave(d) { lsSet(LS.data, d); }
 
-  function stripMember(m) { const { pin, ...rest } = m; rest.hasPin = !!pin; return rest; }
-  function publicSettings(s) { const { adminPin, defaultPin, ...rest } = s; return rest; }
+  // 연락처는 관리자에게만 노출
+  function publicMember(m) { const { phone, ...rest } = m; return rest; }
+  function publicSettings(s) { const { adminPin, ...rest } = s; return rest; }
   function publicView(d) {
-    return { clubs: clone(d.clubs || []), members: (d.members || []).map(stripMember), tournaments: clone(d.tournaments || []), settings: publicSettings(d.settings || {}) };
+    const admin = auth && auth.role === 'admin';
+    return { clubs: clone(d.clubs || []), members: (d.members || []).map(m => admin ? clone(m) : publicMember(m)), tournaments: clone(d.tournaments || []), settings: publicSettings(d.settings || {}) };
   }
 
   function requireAdmin() { if (!auth || auth.role !== 'admin') throw new Error('관리자 권한이 필요합니다.'); }
-  function requireSelf(memberId) {
-    if (!auth) throw new Error('로그인이 필요합니다.');
-    if (auth.role !== 'admin' && auth.memberId !== memberId) throw new Error('본인 정보만 수정할 수 있습니다.');
-  }
 
   // ===== 서버 모드 =====
   async function gasGet(action, params) {
@@ -82,33 +81,24 @@ const Store = (() => {
     /** 전체 데이터 로드 (회원 PIN 제외) */
     async loadAll() {
       if (mode() === 'local') return setCache(publicView(localLoad()));
-      const r = await gasGet('getAll');
+      const r = await gasGet('getAll', auth && auth.token ? { token: auth.token } : {});
       return setCache({ clubs: r.clubs || [], members: r.members || [], tournaments: r.tournaments || [], settings: r.settings || {} });
     },
 
-    /** 로그인: {type:'admin', pin} | {type:'member', clubId, name, pin} | {type:'guest'} */
-    async login(req) {
-      if (req.type === 'guest') { auth = { role: 'guest', token: '', name: '게스트' }; lsSet(LS.auth, auth); return auth; }
+    /** 관리자 로그인 (조회는 로그인 없이 가능) */
+    async login(pin) {
       if (mode() === 'local') {
         const d = localLoad();
-        if (req.type === 'admin') {
-          if (String(req.pin) !== String(d.settings.adminPin)) throw new Error('관리자 PIN이 올바르지 않습니다.');
-          auth = { role: 'admin', token: 'local', name: '관리자' };
-        } else {
-          const m = (d.members || []).find(x => x.clubId === req.clubId && x.name === String(req.name || '').trim());
-          if (!m) throw new Error('해당 클럽에 등록된 회원이 없습니다.');
-          const pin = m.pin || d.settings.defaultPin || '1234';
-          if (String(req.pin) !== String(pin)) throw new Error('PIN이 올바르지 않습니다.');
-          auth = { role: m.role === 'admin' ? 'admin' : 'member', token: 'local', memberId: m.id, name: m.name, clubId: m.clubId };
-        }
-        lsSet(LS.auth, auth);
-        return auth;
+        if (String(pin) !== String(d.settings.adminPin)) throw new Error('관리자 PIN이 올바르지 않습니다.');
+        auth = { role: 'admin', token: 'local' };
+      } else {
+        const r = await gasPost({ action: 'login', pin });
+        auth = { role: 'admin', token: r.token };
       }
-      const r = await gasPost({ action: 'login', ...req });
-      auth = { role: r.role, token: r.token, memberId: r.memberId || null, name: r.name, clubId: r.clubId || null };
       lsSet(LS.auth, auth);
       return auth;
     },
+    isAdmin() { return !!(auth && auth.role === 'admin'); },
     logout() { auth = null; lsDel(LS.auth); },
 
     // ----- 클럽 -----
@@ -140,9 +130,8 @@ const Store = (() => {
         const d = localLoad(); const i = d.members.findIndex(m => m.id === member.id);
         const dup = d.members.find(m => m.id !== member.id && m.clubId === member.clubId && m.name === member.name);
         if (dup) throw new Error('같은 클럽에 동명 회원이 이미 있습니다.');
-        if (i >= 0) { const { pin, ...rest } = member; d.members[i] = { ...d.members[i], ...rest }; if (pin) d.members[i].pin = String(pin); }
-        else d.members.push({ ...member, pin: member.pin ? String(member.pin) : '' });
-        localSave(d); return d.members.map(stripMember);
+        if (i >= 0) d.members[i] = { ...d.members[i], ...member }; else d.members.push(member);
+        localSave(d); return clone(d.members);
       }
       return (await gasPost({ action: 'saveMember', member })).members;
     },
@@ -153,44 +142,19 @@ const Store = (() => {
         list.forEach(member => {
           const ex = d.members.find(m => m.clubId === member.clubId && m.name === member.name);
           if (ex) Object.assign(ex, { gender: member.gender || ex.gender, avg: member.avg != null ? member.avg : ex.avg, phone: member.phone || ex.phone });
-          else d.members.push({ id: uid('m'), role: 'member', pin: '', phone: '', joinDate: '', note: '', ...member });
+          else d.members.push({ id: uid('m'), phone: '', joinDate: '', note: '', ...member });
         });
-        localSave(d); return d.members.map(stripMember);
+        localSave(d); return clone(d.members);
       }
       return (await gasPost({ action: 'saveMembersBulk', members: list })).members;
     },
     async deleteMember(id) {
       requireAdmin();
       if (mode() === 'local') {
-        const d = localLoad(); d.members = d.members.filter(m => m.id !== id); localSave(d); return d.members.map(stripMember);
+        const d = localLoad(); d.members = d.members.filter(m => m.id !== id); localSave(d); return clone(d.members);
       }
       return (await gasPost({ action: 'deleteMember', id })).members;
     },
-    /** 본인 PIN 변경 */
-    async changePin(memberId, oldPin, newPin) {
-      requireSelf(memberId);
-      if (!/^\d{4,6}$/.test(String(newPin))) throw new Error('PIN은 숫자 4~6자리여야 합니다.');
-      if (mode() === 'local') {
-        const d = localLoad(); const m = d.members.find(x => x.id === memberId);
-        if (!m) throw new Error('회원을 찾을 수 없습니다.');
-        const cur = m.pin || d.settings.defaultPin || '1234';
-        if (auth.role !== 'admin' && String(oldPin) !== String(cur)) throw new Error('현재 PIN이 올바르지 않습니다.');
-        m.pin = String(newPin); localSave(d); return true;
-      }
-      await gasPost({ action: 'changePin', memberId, oldPin, newPin }); return true;
-    },
-    /** 본인 프로필(연락처 등) 수정 */
-    async updateProfile(memberId, updates) {
-      requireSelf(memberId);
-      const allowed = { phone: updates.phone };
-      if (mode() === 'local') {
-        const d = localLoad(); const m = d.members.find(x => x.id === memberId);
-        if (!m) throw new Error('회원을 찾을 수 없습니다.');
-        Object.assign(m, allowed); localSave(d); return d.members.map(stripMember);
-      }
-      return (await gasPost({ action: 'updateProfile', memberId, updates: allowed })).members;
-    },
-
     // ----- 대회 -----
     async saveTournament(t) {
       requireAdmin();
@@ -241,7 +205,7 @@ const Store = (() => {
     /** 로컬 데모 데이터 초기화 */
     resetLocal(empty) {
       requireAdmin();
-      if (empty) localSave({ clubs: [], members: [], tournaments: [], settings: { orgName: '전국 볼링 클럽 연합', adminPin: '0000', defaultPin: '1234', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP } });
+      if (empty) localSave({ clubs: [], members: [], tournaments: [], settings: { orgName: '전국 볼링 클럽 연합', adminPin: '0000', pointsTable: Ranking.DEFAULT_POINTS, defaultHandicap: Ranking.DEFAULT_HANDICAP } });
       else lsDel(LS.data);
     }
   };

@@ -25,12 +25,11 @@ const SampleData = (() => {
   };
 
   const members = [];
-  Object.keys(names).forEach((clubId, ci) => {
+  Object.keys(names).forEach(clubId => {
     names[clubId].forEach((n, i) => {
       members.push({
         id: 'm_' + clubId.slice(2) + '_' + (i + 1),
         name: n[0], clubId, gender: n[1], avg: n[2],
-        pin: '1234', role: ci === 0 && i === 0 ? 'admin' : 'member',
         phone: '', joinDate: '2025-0' + ((i % 9) + 1) + '-01', note: ''
       });
     });
@@ -78,7 +77,6 @@ const SampleData = (() => {
   const settings = {
     orgName: '전국 볼링 클럽 연합',
     adminPin: '0000',
-    defaultPin: '1234',
     pointsTable: [10, 8, 6, 5, 4, 3, 2, 1],
     defaultHandicap: handicap
   };

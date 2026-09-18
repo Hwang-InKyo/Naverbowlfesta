@@ -8,7 +8,7 @@
   const state = {
     data: null, auth: null, tab: 'home',
     tId: null, tSub: 'overview', rankView: 'individual', scoreSort: 'lane',
-    memberClub: '', memberQ: '', editMember: null, editClub: null, editT: false,
+    memberClub: '', memberQ: '', editMember: null, editClub: null, editT: false, playerClub: '', playerId: '',
     seasonYear: String(new Date().getFullYear()), dirtyTimer: null
   };
 
@@ -19,8 +19,8 @@
   const statusBadge = s => `<span class="badge ${esc(s)}">${STATUS[s] || s}</span>`;
   const genderBadge = g => `<span class="badge gender-${g === 'F' ? 'F' : 'M'}">${g === 'F' ? '여' : '남'}</span>`;
   const medal = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : r;
-  const isAdmin = () => state.auth && state.auth.role === 'admin';
-  const myId = () => state.auth && state.auth.memberId;
+  const isAdmin = () => Store.isAdmin();
+  const myId = () => state.playerId || null; // 선수 조회 탭에서 선택한 선수 (표에서 강조 표시)
   const clubById = id => (state.data.clubs || []).find(c => c.id === id);
   const clubName = id => { const c = clubById(id); return c ? c.name : '(무소속)'; };
   const memberById = id => (state.data.members || []).find(m => m.id === id);
@@ -37,7 +37,7 @@
   async function run(fn, okMsg) {
     loading(true);
     try { const r = await fn(); if (okMsg) toast(okMsg); return r; }
-    catch (e) { console.error(e); toast(e.message || String(e), true); return undefined; }
+    catch (e) { console.error(e); toast(e.message || String(e), true); if (!Store.isAdmin() && $('#btn-logout').style.display !== 'none') { applyRole(); render(); } return undefined; }
     finally { loading(false); }
   }
   function download(filename, text, type) {
@@ -50,12 +50,11 @@
 
   // ===== 초기화 =====
   async function init() {
-    bindLogin();
+    bindAdmin();
     bindGlobal();
     await reload(true);
-    const saved = Store.session();
-    if (saved) { state.auth = saved; enterApp(); }
-    else showLogin();
+    applyRole();
+    render();
   }
 
   async function reload(silent) {
@@ -64,38 +63,43 @@
     else await run(fn);
   }
 
-  // ===== 로그인 =====
-  function showLogin() {
+  /** 헤더/탭을 현재 권한(관리자 여부)에 맞게 갱신 */
+  function applyRole() {
     const s = state.data.settings || {};
-    $('#login-org').textContent = s.orgName || '전국 볼링 클럽 연합';
-    const mode = $('#login-mode');
-    mode.textContent = Store.mode() === 'remote' ? '서버 연결됨' : '로컬 데모 모드';
-    mode.className = 'mode-badge ' + Store.mode();
-    $('#login-club').innerHTML = clubOptions('', '클럽 선택');
-    $('#login-demo-hint').innerHTML = Store.mode() === 'local'
-      ? '데모 계정 — 관리자 PIN <b>0000</b> · 회원 PIN <b>1234</b><br>데이터는 이 브라우저에만 저장됩니다.'
-      : '회원 PIN을 모르면 클럽 관리자에게 문의하세요.';
-    $('#login-error').textContent = '';
-    $('#login-screen').style.display = 'flex';
-    $('#app-wrap').style.display = 'none';
+    $('#header-org').textContent = '🎳 ' + (s.orgName || '전국 볼링 클럽 연합');
+    const badge = $('#mode-badge');
+    if (isAdmin()) { badge.textContent = '관리자'; badge.className = 'mode-badge admin'; }
+    else { badge.textContent = Store.mode() === 'remote' ? '서버' : '데모'; badge.className = 'mode-badge ' + Store.mode(); }
+    $('#btn-admin').style.display = isAdmin() ? 'none' : '';
+    $('#btn-logout').style.display = isAdmin() ? '' : 'none';
+    $$('.tab-btn[data-role="admin"]').forEach(b => b.style.display = isAdmin() ? '' : 'none');
+    if (state.tab === 'settings' && !isAdmin()) state.tab = 'home';
+    if (state.tId && !isAdmin() && ['entries', 'scores', 'manage'].includes(state.tSub)) state.tSub = 'overview';
   }
 
-  function bindLogin() {
-    $$('.login-tab').forEach(b => b.addEventListener('click', () => {
-      $$('.login-tab').forEach(x => x.classList.toggle('active', x === b));
-      $$('.login-panel').forEach(p => p.classList.toggle('active', p.id === 'login-' + b.dataset.loginTab));
-      $('#login-error').textContent = '';
-    }));
-    $('#login-member').addEventListener('submit', async e => {
-      e.preventDefault();
-      await doLogin({ type: 'member', clubId: $('#login-club').value, name: $('#login-name').value.trim(), pin: $('#login-pin').value });
+  // ===== 관리자 로그인 =====
+  function bindAdmin() {
+    $('#btn-admin').addEventListener('click', () => {
+      $('#admin-error').textContent = ''; $('#admin-pin').value = '';
+      $('#admin-hint').textContent = Store.mode() === 'local' ? '데모 관리자 PIN: 0000' : '';
+      $('#admin-modal').style.display = 'flex'; $('#admin-pin').focus();
     });
-    $('#login-admin').addEventListener('submit', async e => {
+    $('#admin-cancel').addEventListener('click', () => $('#admin-modal').style.display = 'none');
+    $('#admin-modal').addEventListener('click', e => { if (e.target.id === 'admin-modal') $('#admin-modal').style.display = 'none'; });
+    $('#admin-form').addEventListener('submit', async e => {
       e.preventDefault();
-      await doLogin({ type: 'admin', pin: $('#login-admin-pin').value });
+      $('#admin-error').textContent = '';
+      loading(true);
+      try {
+        await Store.login($('#admin-pin').value);
+        $('#admin-modal').style.display = 'none';
+        await reload(true); applyRole(); render();
+        toast('관리자로 로그인했습니다.');
+      } catch (err) { $('#admin-error').textContent = err.message; }
+      finally { loading(false); }
     });
-    $('#btn-guest').addEventListener('click', () => doLogin({ type: 'guest' }));
-    $('#btn-login-server').addEventListener('click', () => {
+    $('#btn-logout').addEventListener('click', logout);
+    $('#btn-server').addEventListener('click', () => {
       const url = prompt('Apps Script 웹앱 URL을 입력하세요.\n비워두면 로컬 데모 모드로 동작합니다.', Store.getApiUrl());
       if (url === null) return;
       Store.setApiUrl(url);
@@ -103,36 +107,12 @@
     });
   }
 
-  async function doLogin(req) {
-    $('#login-error').textContent = '';
-    loading(true);
-    try {
-      state.auth = await Store.login(req);
-      $('#login-pin').value = ''; $('#login-admin-pin').value = '';
-      await reload(true);
-      enterApp();
-    } catch (e) { $('#login-error').textContent = e.message; }
-    finally { loading(false); }
+  async function logout() {
+    await flushPending();
+    Store.logout(); state.editT = false; state.editClub = null; state.editMember = null;
+    await reload(true); applyRole(); render();
+    toast('로그아웃했습니다.');
   }
-
-  function enterApp() {
-    $('#login-screen').style.display = 'none';
-    $('#app-wrap').style.display = 'block';
-    $('#header-org').textContent = '🎳 ' + ((state.data.settings || {}).orgName || '전국 볼링 클럽 연합');
-    const badge = $('#user-badge');
-    const a = state.auth;
-    badge.textContent = a.role === 'admin' ? '관리자' + (a.name && a.name !== '관리자' ? ' · ' + a.name : '') : a.role === 'member' ? a.name + ' · ' + clubName(a.clubId) : '게스트';
-    badge.className = 'user-badge ' + a.role;
-    $$('.tab-btn[data-role]').forEach(b => {
-      const need = b.dataset.role;
-      b.style.display = (need === 'admin' && isAdmin()) || (need === 'member' && myId()) ? '' : 'none';
-    });
-    if (state.tab === 'settings' && !isAdmin()) state.tab = 'home';
-    if (state.tab === 'me' && !myId()) state.tab = 'home';
-    render();
-  }
-
-  async function logout() { await flushPending(); Store.logout(); state.auth = null; state.tab = 'home'; state.tId = null; showLogin(); }
 
   // ===== 렌더 =====
   function render() {
@@ -142,7 +122,7 @@
     switch (state.tab) {
       case 'home': el.innerHTML = renderHome(); break;
       case 'tournaments': el.innerHTML = state.tId ? renderTournamentDetail() : renderTournamentList(); break;
-      case 'me': el.innerHTML = renderMe(); break;
+      case 'player': el.innerHTML = renderPlayer(); break;
       case 'clubs': el.innerHTML = renderClubs(); break;
       case 'members': el.innerHTML = renderMembers(); break;
       case 'season': el.innerHTML = renderSeason(); break;
@@ -177,16 +157,10 @@
         <h3>개인 종합</h3>${podium(res.individual)}
         <h3>클럽 대항</h3>${podium(res.club, true)}</div>`;
     }
-    if (myId()) {
-      const h = Ranking.memberHistory(myId(), d.tournaments, d.members, d.clubs);
-      const s = Ranking.memberStats(h);
-      html += `<div class="card"><h2>👤 내 요약 <button class="btn btn-small btn-outline" data-action="tab" data-tab="me">내 정보</button></h2>
-        <div class="stat-grid">${stat(s.tournaments, '대회 참가')}${stat(s.avgGame || '-', '대회 에버')}${stat(s.high || '-', '하이게임')}${stat(s.bestRank ? s.bestRank + '위' : '-', '최고 순위')}${stat(s.points, '시즌 포인트')}</div></div>`;
-    }
     html += `<div class="card"><h2>📊 연합 현황</h2><div class="stat-grid">
       ${stat(d.clubs.length, '클럽')}${stat(d.members.length, '회원')}${stat(d.tournaments.length, '대회')}${stat(finals.length, '확정 대회')}
     </div></div>`;
-    if (!html) html = '<div class="card"><p class="empty">등록된 대회가 없습니다.</p></div>';
+    if (!isAdmin()) html += `<p class="muted small center mt">대회 운영(참가자 등록·점수 입력)은 우측 상단 <b>관리자</b> 버튼으로 로그인 후 가능합니다.</p>`;
     return html;
   }
   const stat = (v, l) => `<div class="stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`;
@@ -286,10 +260,6 @@
       html += `<div class="card"><h2>개인 종합 TOP 3</h2>${podium(res.individual)}</div><div class="card"><h2>클럽 대항 TOP 3</h2>${podium(res.club, true)}</div>`;
     }
     html += `<div class="card"><h2>클럽별 참가 인원</h2>${Object.keys(byClub).length ? `<div class="row">${Object.entries(byClub).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<span class="chip">${esc(c)} <b>${n}</b></span>`).join('')}</div>` : '<p class="empty">참가자가 없습니다.</p>'}</div>`;
-    if (myId() && (t.entries || []).some(e => e.memberId === myId())) {
-      const r = res.individual.find(x => x.memberId === myId());
-      html += `<div class="card"><h2>내 성적</h2><div class="stat-grid">${stat(r.rank + '위', '개인 순위')}${stat(r.total, '총점')}${stat(r.scratch, '스크래치')}${stat(r.handicap, '핸디/게임')}${stat(r.high || '-', '하이게임')}</div><p class="small mt">게임: ${r.games.map(g => g == null ? '-' : g).join(' / ')}</p></div>`;
-    }
     return html;
   }
 
@@ -383,22 +353,24 @@
     return html;
   }
 
-  // ----- 내 정보 -----
-  function renderMe() {
-    const m = memberById(myId());
-    if (!m) return '<div class="card"><p class="empty">회원 계정으로 로그인하면 내 정보를 볼 수 있습니다.</p></div>';
+  // ----- 선수 조회 -----
+  function renderPlayer() {
     const d = state.data;
+    const clubMembers = d.members.filter(m => !state.playerClub || m.clubId === state.playerClub).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    let html = `<div class="card"><h2>👤 선수 조회</h2>
+      <div class="form-row"><div class="form-group"><label>클럽</label><select data-change="player-club">${clubOptions(state.playerClub, '전체 클럽')}</select></div>
+      <div class="form-group"><label>선수</label><select data-change="player-id"><option value="">선수 선택</option>${clubMembers.map(m => `<option value="${esc(m.id)}" ${m.id === state.playerId ? 'selected' : ''}>${esc(m.name)}${state.playerClub ? '' : ' (' + esc(clubName(m.clubId)) + ')'}</option>`).join('')}</select></div></div></div>`;
+    const m = memberById(state.playerId);
+    if (!m) return html + '<div class="card"><p class="empty">클럽과 선수를 선택하면 대회 이력과 통계를 볼 수 있습니다.</p></div>';
     const h = Ranking.memberHistory(m.id, d.tournaments, d.members, d.clubs);
     const s = Ranking.memberStats(h);
-    return `<div class="card"><h2>👤 ${esc(m.name)} ${genderBadge(m.gender)} ${m.role === 'admin' ? '<span class="badge admin">관리자</span>' : ''}</h2>
-      <div class="stat-grid">${stat(clubName(m.clubId), '소속 클럽')}${stat(m.avg, '기준 에버')}${stat(m.joinDate || '-', '가입일')}</div>
-      <form data-form="save-profile" class="mt"><div class="form-row"><div class="form-group"><label>연락처</label><input type="tel" name="phone" value="${esc(m.phone || '')}" placeholder="010-0000-0000"></div><div class="form-group" style="flex:0;align-self:flex-end"><button class="btn btn-small btn-outline" type="submit">저장</button></div></div></form>
-    </div>
+    html += `<div class="card"><h2>${esc(m.name)} ${genderBadge(m.gender)}</h2>
+      <div class="stat-grid">${stat(clubName(m.clubId), '소속 클럽')}${stat(m.avg, '기준 에버')}${stat(m.joinDate || '-', '가입일')}</div></div>
     <div class="card"><h2>📊 대회 통계</h2><div class="stat-grid">${stat(s.tournaments, '참가 대회')}${stat(s.games, '총 게임')}${stat(s.avgGame || '-', '대회 에버')}${stat(s.high || '-', '하이게임')}${stat(s.bestRank ? s.bestRank + '위' : '-', '최고 순위')}${stat(s.wins, '우승')}${stat(s.podiums, '입상(3위 내)')}${stat(s.points, '시즌 포인트')}</div></div>
     <div class="card"><h2>🏆 대회 이력</h2>${h.length ? `<div class="table-scroll"><table class="tbl"><thead><tr><th class="left">대회</th><th>날짜</th><th>상태</th><th>게임</th><th>스크래치</th><th>핸디</th><th>총점</th><th>순위</th><th>${m.gender === 'F' ? '여자부' : '남자부'}</th><th>클럽순위</th><th>포인트</th></tr></thead><tbody>
       ${h.map(x => `<tr data-action="open-t" data-id="${esc(x.tournamentId)}" style="cursor:pointer"><td class="left"><b>${esc(x.name)}</b></td><td>${esc(x.date)}</td><td>${statusBadge(x.status)}</td><td>${x.games.map(g => g == null ? '-' : g).join('/')}</td><td>${x.scratch}</td><td>${x.handicap}</td><td class="strong">${x.total}</td><td class="rank-${x.rank}">${medal(x.rank)} <span class="muted">/${x.entries}</span></td><td>${x.genderRank ? x.genderRank + '/' + x.genderEntries : '-'}</td><td>${x.clubRank ? x.clubRank + '/' + x.clubCount : '-'}</td><td>${x.points || '-'}</td></tr>`).join('')}
-      </tbody></table></div>` : '<p class="empty">참가한 대회가 없습니다.</p>'}</div>
-    <div class="card"><h2>🔐 PIN 변경</h2><form data-form="change-pin"><div class="form-row"><div class="form-group"><label>현재 PIN</label><input type="password" name="oldPin" inputmode="numeric" maxlength="6" required></div><div class="form-group"><label>새 PIN (숫자 4~6자리)</label><input type="password" name="newPin" inputmode="numeric" maxlength="6" required></div><div class="form-group"><label>새 PIN 확인</label><input type="password" name="newPin2" inputmode="numeric" maxlength="6" required></div></div><button class="btn btn-small btn-primary" type="submit">변경</button></form></div>`;
+      </tbody></table></div>` : '<p class="empty">참가한 대회가 없습니다.</p>'}</div>`;
+    return html;
   }
 
   // ----- 클럽 -----
@@ -433,7 +405,7 @@
       html += `<div class="card"><h2>${em && em.id ? '✏️ 회원 수정' : '＋ 회원 등록'}</h2><form data-form="save-member" data-id="${esc(em ? em.id || '' : '')}">
         <div class="form-row"><div class="form-group"><label>이름</label><input type="text" name="name" required value="${esc(em ? em.name : '')}"></div><div class="form-group"><label>클럽</label><select name="clubId" required>${clubOptions(em ? em.clubId : state.memberClub, '선택')}</select></div><div class="form-group"><label>성별</label><select name="gender"><option value="M" ${em && em.gender === 'F' ? '' : 'selected'}>남</option><option value="F" ${em && em.gender === 'F' ? 'selected' : ''}>여</option></select></div></div>
         <div class="form-row"><div class="form-group"><label>기준 에버</label><input type="number" name="avg" required value="${esc(em ? em.avg : '')}"></div><div class="form-group"><label>가입일</label><input type="date" name="joinDate" value="${esc(em ? em.joinDate : '')}"></div><div class="form-group"><label>연락처</label><input type="tel" name="phone" value="${esc(em ? em.phone : '')}"></div></div>
-        <div class="form-row"><div class="form-group"><label>역할</label><select name="role"><option value="member" ${em && em.role === 'admin' ? '' : 'selected'}>회원</option><option value="admin" ${em && em.role === 'admin' ? 'selected' : ''}>관리자</option></select></div><div class="form-group"><label>PIN ${em && em.id ? '(비우면 유지, 입력하면 초기화)' : '(비우면 기본 PIN)'}</label><input type="text" name="pin" inputmode="numeric" maxlength="6" placeholder="숫자 4~6자리"></div><div class="form-group"><label>비고</label><input type="text" name="note" value="${esc(em ? em.note : '')}"></div></div>
+        <div class="form-group"><label>비고</label><input type="text" name="note" value="${esc(em ? em.note : '')}"></div>
         <div class="row"><button class="btn btn-small btn-primary" type="submit">저장</button>${em ? '<button class="btn btn-small btn-outline" type="button" data-action="cancel-member">취소</button>' : ''}</div></form></div>`;
       html += `<div class="card"><h2>📥 회원 일괄 등록 (CSV)</h2><p class="muted small mb">한 줄에 한 명: <code>이름,클럽명,성별(남/여),에버,연락처</code> · 같은 클럽의 동명 회원은 에버/성별이 갱신됩니다.</p>
         <form data-form="import-members"><textarea name="csv" placeholder="홍길동,아르케 존,남,185,010-1234-5678"></textarea><button class="btn btn-small btn-primary mt" type="submit">가져오기</button></form></div>`;
@@ -444,11 +416,11 @@
     const finals = d.tournaments.filter(t => t.status === 'final');
     html += `<div class="card"><h2>👥 회원 (${list.length}/${d.members.length})</h2>
       <div class="form-row mb"><div class="form-group"><select data-change="member-club">${clubOptions(state.memberClub, '전체 클럽')}</select></div><div class="form-group"><input type="text" data-input="member-q" placeholder="이름 검색" value="${esc(state.memberQ)}"></div></div>
-      <div class="table-scroll"><table class="tbl"><thead><tr><th class="left">이름</th><th class="left">클럽</th><th>성별</th><th>에버</th><th>대회</th><th>우승</th>${isAdmin() ? '<th>PIN</th><th></th>' : ''}</tr></thead><tbody>
+      <div class="table-scroll"><table class="tbl"><thead><tr><th class="left">이름</th><th class="left">클럽</th><th>성별</th><th>에버</th><th>대회</th><th>우승</th>${isAdmin() ? '<th>연락처</th>' : ''}<th></th></tr></thead><tbody>
       ${list.map(m => {
         const hist = Ranking.memberHistory(m.id, finals, d.members, d.clubs);
-        return `<tr class="${m.id === myId() ? 'me' : ''}"><td class="left"><b>${esc(m.name)}</b> ${m.role === 'admin' ? '<span class="badge admin">관리자</span>' : ''}</td><td class="left">${esc(clubName(m.clubId))}</td><td>${genderBadge(m.gender)}</td><td>${m.avg}</td><td>${hist.length}</td><td>${hist.filter(h => h.rank === 1).length || '-'}</td>
-        ${isAdmin() ? `<td>${m.hasPin ? '설정됨' : '<span class="muted">기본</span>'}</td><td class="nowrap"><button class="btn btn-xs btn-outline" data-action="edit-member" data-id="${esc(m.id)}">수정</button> <button class="btn btn-xs btn-danger" data-action="del-member" data-id="${esc(m.id)}">삭제</button></td>` : ''}</tr>`;
+        return `<tr class="${m.id === myId() ? 'me' : ''}"><td class="left"><b>${esc(m.name)}</b></td><td class="left">${esc(clubName(m.clubId))}</td><td>${genderBadge(m.gender)}</td><td>${m.avg}</td><td>${hist.length}</td><td>${hist.filter(h => h.rank === 1).length || '-'}</td>
+        ${isAdmin() ? `<td class="small">${esc(m.phone || '')}</td>` : ''}<td class="nowrap"><button class="btn btn-xs btn-outline" data-action="view-player" data-id="${esc(m.id)}">조회</button>${isAdmin() ? ` <button class="btn btn-xs btn-outline" data-action="edit-member" data-id="${esc(m.id)}">수정</button> <button class="btn btn-xs btn-danger" data-action="del-member" data-id="${esc(m.id)}">삭제</button>` : ''}</td></tr>`;
       }).join('') || `<tr><td colspan="8" class="empty">회원이 없습니다.</td></tr>`}
       </tbody></table></div></div>`;
     return html;
@@ -496,8 +468,7 @@
 
   // ===== 이벤트 =====
   function bindGlobal() {
-    $('#btn-logout').addEventListener('click', logout);
-    $('#main-tabs').addEventListener('click', async e => { const b = e.target.closest('.tab-btn'); if (b) { await flushPending(); state.tab = b.dataset.tab; render(); } });
+    $('#main-tabs').addEventListener('click', async e => { const b = e.target.closest('.tab-btn'); if (b) { await flushPending(); state.tab = b.dataset.tab; if (state.tab === 'tournaments') { state.tId = null; state.editT = false; } render(); } });
     window.addEventListener('beforeunload', () => { if (state.pendingId) flushPending(); });
     document.addEventListener('click', onClick);
     document.addEventListener('submit', onSubmit);
@@ -541,6 +512,7 @@
       case 'export-csv': return exportRankCsv(t);
       case 'print': return window.print();
       case 'club-members': state.tab = 'members'; state.memberClub = id; return render();
+      case 'view-player': { const m = memberById(id); state.tab = 'player'; state.playerClub = m ? m.clubId : ''; state.playerId = id; render(); return window.scrollTo(0, 0); }
       case 'edit-club': state.editClub = { ...clubById(id) }; render(); return window.scrollTo(0, 0);
       case 'cancel-club': state.editClub = null; return render();
       case 'del-club':
@@ -590,8 +562,7 @@
         if (r) { state.editClub = null; render(); } return;
       }
       case 'save-member': {
-        const obj = { id: f.dataset.id || '', name: v('name'), clubId: v('clubId'), gender: v('gender'), avg: num(v('avg')), joinDate: v('joinDate'), phone: v('phone'), role: v('role'), note: v('note') };
-        if (v('pin')) { if (!/^\d{4,6}$/.test(v('pin'))) return toast('PIN은 숫자 4~6자리여야 합니다.', true); obj.pin = v('pin'); }
+        const obj = { id: f.dataset.id || '', name: v('name'), clubId: v('clubId'), gender: v('gender'), avg: num(v('avg')), joinDate: v('joinDate'), phone: v('phone'), note: v('note') };
         if (!obj.clubId) return toast('클럽을 선택하세요.', true);
         const r = await run(async () => { state.data.members = await Store.saveMember(obj); return true; }, '저장되었습니다.');
         if (r) { state.editMember = null; render(); } return;
@@ -610,20 +581,11 @@
         const r = await run(async () => { state.data.members = await Store.saveMembersBulk(list); return true; }, list.length + '명 처리되었습니다.');
         if (r) render(); return;
       }
-      case 'save-profile': {
-        const r = await run(async () => { state.data.members = await Store.updateProfile(myId(), { phone: v('phone') }); return true; }, '저장되었습니다.');
-        if (r) render(); return;
-      }
-      case 'change-pin': {
-        if (v('newPin') !== v('newPin2')) return toast('새 PIN이 일치하지 않습니다.', true);
-        const r = await run(() => Store.changePin(myId(), v('oldPin'), v('newPin')), 'PIN이 변경되었습니다.');
-        if (r) f.reset(); return;
-      }
       case 'save-settings': {
         const pointsTable = v('pointsTable').split(',').map(s => num(s.trim())).filter(n => n > 0);
         const s = { orgName: v('orgName'), pointsTable: pointsTable.length ? pointsTable : Ranking.DEFAULT_POINTS, defaultHandicap: { type: v('hType'), base: num(v('hBase'), 200), rate: v('hRate') === '' ? 1 : num(v('hRate'), 1), cap: v('hCap') === '' ? '' : num(v('hCap')), femaleBonus: num(v('hFemale')) } };
         const r = await run(async () => { state.data.settings = { ...state.data.settings, ...(await Store.saveSettings(s)) }; return true; }, '저장되었습니다.');
-        if (r) { $('#header-org').textContent = '🎳 ' + state.data.settings.orgName; render(); } return;
+        if (r) { applyRole(); render(); } return;
       }
       case 'save-admin-pin': {
         if (!/^\d{4,6}$/.test(v('adminPin'))) return toast('PIN은 숫자 4~6자리여야 합니다.', true);
@@ -641,6 +603,8 @@
     if (k === 'entry-all') { $$('.entry-cb').forEach(c => c.checked = el.checked); return; }
     if (k === 'score-sort') { state.scoreSort = el.value; return render(); }
     if (k === 'member-club') { state.memberClub = el.value; return render(); }
+    if (k === 'player-club') { state.playerClub = el.value; if (state.playerId && (memberById(state.playerId) || {}).clubId !== el.value && el.value) state.playerId = ''; return render(); }
+    if (k === 'player-id') { state.playerId = el.value; return render(); }
     if (k === 'season-year') { state.seasonYear = el.value; return render(); }
     if (k === 'import-json') {
       const file = el.files[0]; if (!file) return;

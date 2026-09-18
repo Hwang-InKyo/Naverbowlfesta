@@ -11,9 +11,12 @@
  *    - 실행 사용자: 본인 / 액세스: 모든 사용자
  * 6. 배포 URL을 웹앱 설정 탭 "서버 연결" 에 입력 (또는 js/store.js 의 DEFAULT_API_URL)
  *
+ * 조회(getAll)는 누구나 가능하고, 데이터 수정은 관리자 PIN 로그인 토큰이 있어야 합니다.
+ * 회원 연락처는 관리자 토큰으로 조회할 때만 내려갑니다.
+ *
  * 시트는 첫 호출 시 자동 생성됩니다.
  *  - 클럽 : ID | 이름 | 지역 | 회장 | 비고
- *  - 회원 : ID | 이름 | 클럽ID | 성별 | 에버 | PIN | 역할 | 연락처 | 가입일 | 비고
+ *  - 회원 : ID | 이름 | 클럽ID | 성별 | 에버 | 연락처 | 가입일 | 비고
  *  - 대회 : ID | 이름 | 날짜 | 상태 | 데이터(JSON)
  *  - 설정 : 키 | 값
  */
@@ -26,12 +29,11 @@ const SHEET_TOURNAMENTS = '대회';
 const SHEET_SETTINGS = '설정';
 
 const H_CLUBS = ['ID', '이름', '지역', '회장', '비고'];
-const H_MEMBERS = ['ID', '이름', '클럽ID', '성별', '에버', 'PIN', '역할', '연락처', '가입일', '비고'];
+const H_MEMBERS = ['ID', '이름', '클럽ID', '성별', '에버', '연락처', '가입일', '비고'];
 const H_TOURNAMENTS = ['ID', '이름', '날짜', '상태', '데이터'];
 const H_SETTINGS = ['키', '값'];
 
 const TOKEN_TTL_SEC = 6 * 60 * 60; // 6시간
-const DEFAULT_PIN = '1234';
 
 // ===== 진입점 =====
 function doGet(e) {
@@ -39,7 +41,7 @@ function doGet(e) {
     const action = (e.parameter || {}).action;
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     switch (action) {
-      case 'getAll': return resp(getAll(ss));
+      case 'getAll': return resp(getAll(ss, isAdminToken(e.parameter.token)));
       case 'ping': return resp({ ok: true, time: new Date().toISOString() });
       default: return resp({ error: 'Unknown action: ' + action });
     }
@@ -55,24 +57,20 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents || '{}');
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const action = body.action;
-    if (action === 'login') return resp(login(ss, body));
+    if (action === 'login') return resp(login(body.pin));
 
-    const sess = requireToken(body.token);
+    requireAdminToken(body.token);
     switch (action) {
-      // 관리자
-      case 'saveClub': requireAdmin(sess); return resp(saveClub(ss, body.club));
-      case 'deleteClub': requireAdmin(sess); return resp(deleteClub(ss, body.id));
-      case 'saveMember': requireAdmin(sess); return resp(saveMember(ss, body.member));
-      case 'saveMembersBulk': requireAdmin(sess); return resp(saveMembersBulk(ss, body.members));
-      case 'deleteMember': requireAdmin(sess); return resp(deleteMember(ss, body.id));
-      case 'saveTournament': requireAdmin(sess); return resp(saveTournament(ss, body.tournament));
-      case 'deleteTournament': requireAdmin(sess); return resp(deleteTournament(ss, body.id));
-      case 'saveSettings': requireAdmin(sess); return resp(saveSettings(ss, body.settings));
-      case 'exportAll': requireAdmin(sess); return resp(exportAll(ss));
-      case 'importAll': requireAdmin(sess); return resp(importAll(ss, body));
-      // 본인
-      case 'changePin': requireSelf(sess, body.memberId); return resp(changePin(ss, sess, body));
-      case 'updateProfile': requireSelf(sess, body.memberId); return resp(updateProfile(ss, body.memberId, body.updates));
+      case 'saveClub': return resp(saveClub(ss, body.club));
+      case 'deleteClub': return resp(deleteClub(ss, body.id));
+      case 'saveMember': return resp(saveMember(ss, body.member));
+      case 'saveMembersBulk': return resp(saveMembersBulk(ss, body.members));
+      case 'deleteMember': return resp(deleteMember(ss, body.id));
+      case 'saveTournament': return resp(saveTournament(ss, body.tournament));
+      case 'deleteTournament': return resp(deleteTournament(ss, body.id));
+      case 'saveSettings': return resp(saveSettings(ss, body.settings));
+      case 'exportAll': return resp(exportAll(ss));
+      case 'importAll': return resp(importAll(ss, body));
       default: return resp({ error: 'Unknown action: ' + action });
     }
   } catch (err) {
@@ -87,51 +85,29 @@ function adminPin() {
   return PropertiesService.getScriptProperties().getProperty('ADMIN_PIN') || '0000';
 }
 
-function login(ss, body) {
-  const cache = CacheService.getScriptCache();
-  let sess;
-  if (body.type === 'admin') {
-    if (String(body.pin) !== String(adminPin())) throw new Error('관리자 PIN이 올바르지 않습니다.');
-    sess = { role: 'admin', name: '관리자' };
-  } else {
-    const rows = readMembersRaw(ss);
-    const name = String(body.name || '').trim();
-    const m = rows.find(r => r.clubId === body.clubId && r.name === name);
-    if (!m) throw new Error('해당 클럽에 등록된 회원이 없습니다.');
-    const pin = m.pin || settingValue(ss, 'defaultPin') || DEFAULT_PIN;
-    if (String(body.pin) !== String(pin)) throw new Error('PIN이 올바르지 않습니다.');
-    sess = { role: m.role === 'admin' ? 'admin' : 'member', memberId: m.id, name: m.name, clubId: m.clubId };
-  }
+function login(pin) {
+  if (String(pin) !== String(adminPin())) throw new Error('관리자 PIN이 올바르지 않습니다.');
   const token = Utilities.getUuid();
-  cache.put('tok_' + token, JSON.stringify(sess), TOKEN_TTL_SEC);
-  return Object.assign({ token }, sess);
+  CacheService.getScriptCache().put('tok_' + token, 'admin', TOKEN_TTL_SEC);
+  return { token, role: 'admin' };
 }
 
-function requireToken(token) {
-  if (!token) throw new Error('로그인이 필요합니다.');
-  const raw = CacheService.getScriptCache().get('tok_' + token);
-  if (!raw) throw new Error('로그인 토큰이 만료되었습니다. 다시 로그인하세요.');
-  return JSON.parse(raw);
+function isAdminToken(token) {
+  return !!token && CacheService.getScriptCache().get('tok_' + token) === 'admin';
 }
-function requireAdmin(sess) { if (sess.role !== 'admin') throw new Error('관리자 권한이 필요합니다.'); }
-function requireSelf(sess, memberId) {
-  if (sess.role !== 'admin' && sess.memberId !== memberId) throw new Error('본인 정보만 수정할 수 있습니다.');
+function requireAdminToken(token) {
+  if (!token) throw new Error('관리자 로그인이 필요합니다.');
+  if (!isAdminToken(token)) throw new Error('로그인 토큰이 만료되었습니다. 다시 로그인하세요.');
 }
 
 // ===== 조회 =====
-function getAll(ss) {
+function getAll(ss, admin) {
   return {
     clubs: getClubs(ss),
-    members: readMembersRaw(ss).map(stripPin),
+    members: getMembers(ss, admin),
     tournaments: getTournaments(ss),
     settings: publicSettings(getSettings(ss))
   };
-}
-
-function stripPin(m) {
-  const o = {}; Object.keys(m).forEach(k => { if (k !== 'pin') o[k] = m[k]; });
-  o.hasPin = !!m.pin;
-  return o;
 }
 
 // ===== 클럽 =====
@@ -172,16 +148,19 @@ function readMembersRaw(ss) {
     if (!data[i][0]) continue;
     members.push({
       id: str(data[i][0]), name: str(data[i][1]), clubId: str(data[i][2]), gender: str(data[i][3]) || 'M',
-      avg: Number(data[i][4]) || 0, pin: str(data[i][5]), role: str(data[i][6]) || 'member',
-      phone: str(data[i][7]), joinDate: fmtDate(data[i][8]), note: str(data[i][9])
+      avg: Number(data[i][4]) || 0, phone: str(data[i][5]), joinDate: fmtDate(data[i][6]), note: str(data[i][7])
     });
   }
   return members;
 }
 
-function memberRow(m, existing) {
-  const pin = m.pin ? String(m.pin) : (existing ? existing.pin : '');
-  return [m.id, m.name || '', m.clubId || '', m.gender || 'M', Number(m.avg) || 0, pin, m.role || 'member', m.phone || '', m.joinDate || '', m.note || ''];
+/** 관리자가 아니면 연락처 제외 */
+function getMembers(ss, admin) {
+  return readMembersRaw(ss).map(m => { if (admin) return m; const o = Object.assign({}, m); delete o.phone; return o; });
+}
+
+function memberRow(m) {
+  return [m.id, m.name || '', m.clubId || '', m.gender || 'M', Number(m.avg) || 0, m.phone || '', m.joinDate || '', m.note || ''];
 }
 
 function saveMember(ss, member) {
@@ -189,11 +168,10 @@ function saveMember(ss, member) {
   const all = readMembersRaw(ss);
   member.id = member.id || newId('m');
   if (all.some(x => x.id !== member.id && x.clubId === member.clubId && x.name === member.name)) throw new Error('같은 클럽에 동명 회원이 이미 있습니다.');
-  const existing = all.find(x => x.id === member.id);
-  const row = memberRow(member, existing);
+  const row = memberRow(member);
   const idx = findRow(sheet, member.id);
   if (idx > 0) sheet.getRange(idx, 1, 1, row.length).setValues([row]); else sheet.appendRow(row);
-  return { members: readMembersRaw(ss).map(stripPin) };
+  return { members: getMembers(ss, true) };
 }
 
 function saveMembersBulk(ss, list) {
@@ -205,42 +183,22 @@ function saveMembersBulk(ss, list) {
     if (ex) {
       const merged = Object.assign({}, ex, { gender: m.gender || ex.gender, avg: m.avg != null ? m.avg : ex.avg, phone: m.phone || ex.phone });
       const idx = findRow(sheet, ex.id);
-      if (idx > 0) sheet.getRange(idx, 1, 1, H_MEMBERS.length).setValues([memberRow(merged, ex)]);
+      if (idx > 0) sheet.getRange(idx, 1, 1, H_MEMBERS.length).setValues([memberRow(merged)]);
     } else {
-      const nm = Object.assign({ role: 'member', pin: '', phone: '', joinDate: '', note: '' }, m, { id: newId('m') });
-      appended.push(memberRow(nm, null));
+      const nm = Object.assign({ phone: '', joinDate: '', note: '' }, m, { id: newId('m') });
+      appended.push(memberRow(nm));
       all.push(nm);
     }
   });
   if (appended.length) sheet.getRange(sheet.getLastRow() + 1, 1, appended.length, H_MEMBERS.length).setValues(appended);
-  return { members: readMembersRaw(ss).map(stripPin) };
+  return { members: getMembers(ss, true) };
 }
 
 function deleteMember(ss, id) {
   const sheet = getOrCreateSheet(ss, SHEET_MEMBERS, H_MEMBERS);
   const idx = findRow(sheet, id);
   if (idx > 0) sheet.deleteRow(idx);
-  return { members: readMembersRaw(ss).map(stripPin) };
-}
-
-function changePin(ss, sess, body) {
-  if (!/^\d{4,6}$/.test(String(body.newPin))) throw new Error('PIN은 숫자 4~6자리여야 합니다.');
-  const sheet = getOrCreateSheet(ss, SHEET_MEMBERS, H_MEMBERS);
-  const m = readMembersRaw(ss).find(x => x.id === body.memberId);
-  if (!m) throw new Error('회원을 찾을 수 없습니다.');
-  const cur = m.pin || settingValue(ss, 'defaultPin') || DEFAULT_PIN;
-  if (sess.role !== 'admin' && String(body.oldPin) !== String(cur)) throw new Error('현재 PIN이 올바르지 않습니다.');
-  const idx = findRow(sheet, m.id);
-  sheet.getRange(idx, 6).setValue(String(body.newPin));
-  return { ok: true };
-}
-
-function updateProfile(ss, memberId, updates) {
-  const sheet = getOrCreateSheet(ss, SHEET_MEMBERS, H_MEMBERS);
-  const idx = findRow(sheet, memberId);
-  if (idx <= 0) throw new Error('회원을 찾을 수 없습니다.');
-  if (updates && updates.phone !== undefined) sheet.getRange(idx, 8).setValue(String(updates.phone || ''));
-  return { members: readMembersRaw(ss).map(stripPin) };
+  return { members: getMembers(ss, true) };
 }
 
 // ===== 대회 =====
@@ -281,7 +239,7 @@ function deleteTournament(ss, id) {
 function getSettings(ss) {
   const sheet = getOrCreateSheet(ss, SHEET_SETTINGS, H_SETTINGS);
   const data = sheet.getDataRange().getValues();
-  const s = { orgName: '전국 볼링 클럽 연합', defaultPin: DEFAULT_PIN, pointsTable: [10, 8, 6, 5, 4, 3, 2, 1], defaultHandicap: { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 } };
+  const s = { orgName: '전국 볼링 클럽 연합', pointsTable: [10, 8, 6, 5, 4, 3, 2, 1], defaultHandicap: { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 } };
   for (let i = 1; i < data.length; i++) {
     const k = str(data[i][0]); if (!k) continue;
     const v = str(data[i][1]);
@@ -289,8 +247,7 @@ function getSettings(ss) {
   }
   return s;
 }
-function settingValue(ss, key) { return getSettings(ss)[key]; }
-function publicSettings(s) { const o = Object.assign({}, s); delete o.adminPin; delete o.defaultPin; return o; }
+function publicSettings(s) { const o = Object.assign({}, s); delete o.adminPin; return o; }
 
 function saveSettings(ss, settings) {
   settings = settings || {};
@@ -323,7 +280,7 @@ function importAll(ss, data) {
   if (Array.isArray(data.members)) {
     const sheet = getOrCreateSheet(ss, SHEET_MEMBERS, H_MEMBERS);
     clearRows(sheet);
-    const rows = data.members.map(m => memberRow(Object.assign({}, m, { id: m.id || newId('m') }), null));
+    const rows = data.members.map(m => memberRow(Object.assign({}, m, { id: m.id || newId('m') })));
     if (rows.length) sheet.getRange(2, 1, rows.length, H_MEMBERS.length).setValues(rows);
   }
   if (Array.isArray(data.tournaments)) {
