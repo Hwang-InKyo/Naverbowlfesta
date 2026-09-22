@@ -15,7 +15,7 @@
   --silver: #c0c0c0;
   --bronze: #cd7f32;
   --radius: 12px;
-  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -42,7 +42,7 @@ a { color: var(--primary-light); }
 
 /* ===== 헤더 / 탭 ===== */
 header {
-  background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white;
+  background: var(--primary); color: white;
   padding: 12px 16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.15);
 }
 .header-inner { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -91,7 +91,7 @@ main { max-width: 1000px; margin: 0 auto; padding: 12px; }
 input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="tel"], input[type="url"], select, textarea {
   width: 100%; padding: 9px 11px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.92rem; background: white; -webkit-appearance: none; font-family: inherit;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,101,45,0.1); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
 textarea { min-height: 90px; resize: vertical; }
 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; max-height: 230px; overflow-y: auto; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .checkbox-item { display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
@@ -99,8 +99,8 @@ textarea { min-height: 90px; resize: vertical; }
 
 /* ===== 버튼 ===== */
 .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 0.92rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-light)); color: white; }
-.btn-primary:hover { box-shadow: 0 4px 12px rgba(232,101,45,0.3); }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #cf5522; }
 .btn-secondary { background: var(--primary); color: white; }
 .btn-outline { background: white; color: var(--primary); border: 1.5px solid var(--border); }
 .btn-danger { background: var(--danger); color: white; }
@@ -162,9 +162,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-spa
 /* ===== 포디움 ===== */
 .podium { display: flex; gap: 8px; justify-content: center; align-items: flex-end; margin: 8px 0; }
 .podium .p { flex: 1; max-width: 140px; text-align: center; background: var(--bg); border-radius: 10px; padding: 10px 6px; }
-.podium .p.first { background: linear-gradient(180deg, #fff6c7, #ffe98a); }
-.podium .p.second { background: linear-gradient(180deg, #f3f3f3, #dcdcdc); }
-.podium .p.third { background: linear-gradient(180deg, #f9e3cf, #ecc19a); }
+.podium .p.first { background: #fff1b8; }
+.podium .p.second { background: #e8e8e8; }
+.podium .p.third { background: #f3dcc6; }
 .podium .p .n { font-weight: 700; font-size: 0.92rem; }
 .podium .p .c { font-size: 0.7rem; color: var(--text-light); }
 .podium .p .s { font-size: 1rem; font-weight: 700; color: var(--primary); margin-top: 4px; }
@@ -192,7 +192,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-spa
 
 /* ===== 대회 전용 추가 ===== */
 .progress { background: var(--bg); border-radius: 8px; height: 10px; overflow: hidden; }
-.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-light)); }
+.progress > span { display: block; height: 100%; background: var(--accent); }
 .progress-row { display: grid; grid-template-columns: 90px 1fr 60px; gap: 8px; align-items: center; font-size: 0.8rem; margin-bottom: 6px; }
 .ev { display: inline-block; font-size: 0.62rem; padding: 1px 5px; border-radius: 4px; margin-right: 2px; color: white; }
 .ev.individual { background: var(--primary-light); } .ev.scotch { background: #b32b6a; } .ev.baker { background: #1f7a33; } .ev.team5 { background: #8a5a00; }
@@ -210,3 +210,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-spa
 .schedule { white-space: pre-line; font-size: 0.85rem; line-height: 1.6; background: var(--bg); border-radius: 8px; padding: 10px 12px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
 .status-final { color: var(--success); font-weight: 700; }
+
+/* ===== 단색/미니멀 ===== */
+.rk { display: inline-block; min-width: 22px; height: 22px; line-height: 22px; border-radius: 50%; font-size: 0.75rem; font-weight: 700; color: white; text-align: center; }
+.rk-1 { background: #d4a017; } .rk-2 { background: #8a8f98; } .rk-3 { background: #b5722f; }
+.rep-badge { background: var(--accent); color: white; font-size: 0.6rem; padding: 1px 6px; vertical-align: middle; }
+.podium .p > div:first-child { display: none; }
+.podium .p .n { margin-top: 2px; }
+.tab-btn { font-size: 0.82rem; }
+.card h2 { font-weight: 700; }

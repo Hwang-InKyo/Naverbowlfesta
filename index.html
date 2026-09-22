@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🎳 볼링 페스타</title>
+  <title>볼링 페스타</title>
   <link rel="stylesheet" href="css/style.css?v=2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎳</text></svg>">
 </head>
 <body>
   <div id="admin-modal" class="modal" style="display:none;">
     <form id="admin-form" class="modal-box" autocomplete="off">
-      <h2>🔐 관리자 로그인</h2>
+      <h2>관리자 로그인</h2>
       <input type="password" id="admin-pin" placeholder="관리자 PIN" inputmode="numeric" maxlength="6" required>
       <p id="admin-error" class="form-error"></p>
       <div class="row"><button class="btn btn-primary" type="submit">로그인</button><button class="btn btn-outline" type="button" id="admin-cancel">취소</button></div>
       <p id="admin-hint" class="muted small mt"></p>
-      <button class="link-btn dark" id="btn-server" type="button">⚙ 서버 연결 설정</button>
+      <button class="link-btn dark" id="btn-server" type="button"> 서버 연결 설정</button>
     </form>
   </div>
 
@@ -23,27 +23,27 @@
     <header>
       <div class="header-inner">
         <div>
-          <h1 id="header-title">🎳 전국대회</h1>
+          <h1 id="header-title">전국대회</h1>
           <p class="subtitle" id="header-sub"></p>
         </div>
         <div class="header-right">
           <span id="mode-badge" class="mode-badge"></span>
-          <button id="btn-admin" class="btn btn-xs btn-outline">🔐 관리자</button>
+          <button id="btn-admin" class="btn btn-xs btn-outline"> 관리자</button>
           <button id="btn-logout" class="btn btn-xs btn-outline" style="display:none;">로그아웃</button>
         </div>
       </div>
     </header>
 
     <nav class="tabs" id="main-tabs">
-      <button class="tab-btn active" data-tab="home">🏠 홈</button>
-      <button class="tab-btn" data-tab="players">👥 선수</button>
-      <button class="tab-btn" data-tab="assign">🎯 배정</button>
-      <button class="tab-btn" data-tab="individual">🎳 개인전</button>
-      <button class="tab-btn" data-tab="scotch">👫 스카치</button>
-      <button class="tab-btn" data-tab="baker">🤝 베이커</button>
-      <button class="tab-btn" data-tab="team5">🏁 5인조</button>
-      <button class="tab-btn" data-tab="standings">🏆 지역종합</button>
-      <button class="tab-btn" data-tab="settings" data-role="admin">⚙️ 설정</button>
+      <button class="tab-btn active" data-tab="home">홈</button>
+      <button class="tab-btn" data-tab="players">선수</button>
+      <button class="tab-btn" data-tab="assign">배정</button>
+      <button class="tab-btn" data-tab="individual">개인전</button>
+      <button class="tab-btn" data-tab="scotch">스카치</button>
+      <button class="tab-btn" data-tab="baker">베이커</button>
+      <button class="tab-btn" data-tab="team5">5인조</button>
+      <button class="tab-btn" data-tab="standings">지역종합</button>
+      <button class="tab-btn" data-tab="settings" data-role="admin">설정</button>
     </nav>
 
     <main>
