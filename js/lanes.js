@@ -1,5 +1,6 @@
 /**
- * lanes.js - 조 편성 / 레인 배정 (순수 함수)
+ * lanes.js - 조 편성 / 테이블(좌우 2레인) 배정 (순수 함수)
+ * 아래의 lane/lanes 는 '테이블 번호'를 뜻한다. 테이블 t 는 레인 2t-1, 2t 를 사용한다.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -34,7 +35,7 @@
 
   /**
    * 한 조의 레인 배정.
-   * players: 해당 조 선수, lanes: 사용할 레인 번호 배열, perLane: 레인당 인원
+   * players: 해당 조 선수, lanes: 사용할 테이블 번호 배열, perLane: 테이블당 인원
    * 같은 지역 선수가 같은 레인에 겹치지 않도록 우선 배치. 반환: { playerId: { lane, pos } }
    */
   function assignLanes(players, lanes, perLane) {

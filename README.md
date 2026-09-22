@@ -46,11 +46,20 @@
 |---|---|
 | 홈 | 대시보드: 참가 선수·레인·진행률·확정 통계, 결과 관리(대회 시작·최종 확정), 빠른 실행 |
 | 선수 | 참가 선수 명단(지역/성별/검색), 생년, 핸디, 가감, 조·레인, 출전 종목 (기준 에버는 대회 성적과 무관하므로 없음). 관리자: 지역 관리, 선수 등록/수정(핸디 직접 입력), 신청서 일괄 등록 |
-| 배정 | 개인전 조별 레인표, 스카치/베이커 팀. 관리자: 조 자동 편성(지역별 균등), 레인 자동 배정(같은 지역 분산), 팀 만들기(팀 핸디·가감 입력), 직접 수정 |
-| 개인전 | 남/여/전체/조별 순위. 관리자: 조별 점수 입력(자동 저장) |
+| 배정 | 개인전 조별 테이블표, 스카치/베이커 팀. 관리자: 조 자동 편성(지역별 균등), 테이블 자동 배정(같은 지역 분산), 팀 만들기(팀 핸디·가감 입력), 직접 수정 후 저장 |
+| 개인전 | 남/여/전체/조별 순위. 관리자: 조별 점수 입력 후 **저장** 버튼으로 저장(저장 전 이동 시 확인), 실시간 집계 |
 | 스카치 · 베이커 | 팀 순위. 관리자: 점수 입력 |
 | 지역종합 | 지역 종합 순위(포인트 상세), 3인조(지역 대표 합계) 순위. 관리자: 대회 시작/최종 확정/확정 해제 |
 | 설정 | 대회 정보, 조 구성(조별 핸디 보너스), 경기 규정 안내문, 순위 기준, 게임 수, 배점표, 관리자 PIN, 서버 연결, 백업 |
+
+### 테이블 배정
+경기는 한 테이블(좌우 2레인)씩 사용하므로 배정 단위는 레인이 아니라 **테이블**입니다. 1번 테이블 = 1·2레인, 2번 테이블 = 3·4레인. 표시는 `테이블-순번` (예: 1-1 홍길동, 1-2 황인교, 2-1 장영민). 설정의 "테이블당 인원"과 "시작 테이블"로 자동 배정합니다. 데이터의 `lane` 필드는 테이블 번호를 담습니다.
+
+### 저장 방식
+점수·배정 입력은 자동 저장하지 않습니다. 입력 후 카드 하단의 **저장** 버튼을 눌러야 저장되며, 저장하지 않은 변경이 있으면 화면 이동·로그아웃·창 닫기 시 확인창이 뜹니다. 신청서 업로드와 점수표 붙여넣기 "적용"은 즉시 저장됩니다.
+
+### 데모 모드와 기기 간 공유
+서버(Apps Script) URL을 연결하기 전에는 **데모 모드**로, 입력한 데이터가 그 브라우저의 localStorage에만 저장됩니다. PC에서 입력한 내용이 핸드폰에서 보이지 않는 것은 이 때문입니다. 모든 기기가 같은 데이터를 보려면 아래 "실제 운영" 절차로 Google 스프레드시트를 연결하세요.
 
 ### 핸디와 순위 규정
 - **핸디는 관리자가 직접 입력**합니다 (선수별 게임당 핸디, 팀별 게임당 핸디). 규정(여성 15, 시니어 1~5, 최고 20, 장애 7, 베이커 여성 +3/+5 등)은 홈 화면 안내문으로 표시되고 계산은 입력값 기준입니다.
@@ -96,7 +105,7 @@ python3 -m http.server 8080   # http://localhost:8080
 - `클럽명` 옆 칸 → 지역(클럽). 없으면 새로 만듭니다.
 - 개인전 블록(`1조`, `2조`… 라벨 아래 `성명 | 성별 | 일반 핸디 | 시니어핸디 | 사이드`) → 선수, 조 배정, 핸디(일반+시니어), 사이드 여부
 - `3인조` 명단 → 지역 대표 지정
-- `스카치` 팀(2명씩), `베이커` 팀(3명씩) → 팀 생성. 베이커는 여성 1명 +3, 2명 이상 +5 핸디를 자동 입력(수정 가능)
+- `스카치` 팀(2명씩), `베이커` 팀(3명씩) → 팀 생성. 팀명은 **지역명+번호**(예: 일산1, 일산2). 베이커는 여성 1명 +3, 2명 이상 +5 핸디를 자동 입력(수정 가능)
 - 신청서의 조 이름이 설정의 조 이름과 같으면 그대로, 다르면 순서대로 대응
 - "기존 선수·팀을 신청서 기준으로 교체"를 켜면 그 클럽의 이전 등록 내용을 신청서 내용으로 갱신합니다 (이미 입력된 점수는 같은 이름 선수에 유지)
 - 파서는 `js/signup.js` (순수 함수, `test/signup.test.js` 에서 실제 신청서로 검증)
@@ -130,11 +139,11 @@ test/               node --test test/*.test.js test/scores-import.test.js
 
 ### 데이터 모델
 ```js
-settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', lanes, laneFrom, perLane,
+settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', lanes, tableFrom, perTable,
            groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker},
            repCount, points:{individualM,individualF,reps,scotch,baker}, schedule, rulesNote }
 region   { id, name, leader, note }
-player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane, pos, games[], events:{individual,scotch,baker,side}, note }
+player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane(테이블 번호), pos, games[], events:{individual,scotch,baker,side}, note }
 team     { id, event:'scotch'|'baker', regionId, name, members:[playerId], lane, handicap, adjust, games[] }
 results  확정 스냅샷 (Ranking.regionStandings 결과)
 ```

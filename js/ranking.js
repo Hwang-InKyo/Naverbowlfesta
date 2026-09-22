@@ -28,13 +28,13 @@
   };
 
   const DEFAULT_SETTINGS = {
-    name: '전국대회', venue: '', dates: ['', ''], lanes: 20, laneFrom: 1,
+    name: '전국대회', venue: '', dates: ['', ''], lanes: 20, tableFrom: 1,
     status: 'ready', // ready | live | final
     basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
     games: { individual: 3, scotch: 2, baker: 2 },
     groups: [{ id: 'A', name: '1조', day: 1, time: '', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '', bonus: 0 }],
     rulesNote: '개인전: 1인 3게임 총점, 매 게임 우측 4테이블 이동. 남자 1~5위, 여자 1~5위 시상.\n동점: 비핸디 → 하이/로우 → 연장자 순.\n1조(일요일 첫 경기) 핸디 +10점.\n핸디(개인전, 게임당): 여성 15, 시니어(만 60세 이상) 연도별 1~5점, 최고 20점. 장애인 4급 이상 7점(사전 통보).\n스카치: 팀당 2게임, 남녀 2인(여자 초구), 여자 회원 없는 클럽 제외. 장애인 +3/게임. 1~3위 시상.\n베이커: 팀당 2게임, 여자 1명 +3, 여자 2명 이상 +5, 장애인 +3 (게임당). 1~3위 시상.\n감점: 클럽티 미착용 -10/게임, 복장 불이행 -5/게임. 프로: 개인전 총점 -21, 스카치·베이커 -3/게임.',
-    perLane: 4,
+    perTable: 4,                 // 테이블(좌우 2레인)당 인원
     repCount: 3,
     points: { individualM: [5, 4, 3, 2, 1], individualF: [3, 2, 1], reps: [3, 2, 1], scotch: [3, 2, 1], baker: [3, 2, 1] }
   };
@@ -46,6 +46,10 @@
     const out = { ...d, ...s };
     ['games', 'points'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
     delete out.handicap; delete out.teamHandicap;
+    // 이전 형식(레인 단위) 호환
+    if (s.perLane != null && s.perTable == null) out.perTable = s.perLane;
+    if (s.laneFrom != null && s.tableFrom == null) out.tableFrom = s.laneFrom;
+    delete out.perLane; delete out.laneFrom;
     // 이전 형식(points.individual 하나) 호환
     if (s.points && s.points.individual && !s.points.individualM) { out.points.individualM = s.points.individual; if (!s.points.individualF) out.points.individualF = s.points.individual; }
     delete out.points.individual; delete out.points.team5; delete out.countTeam5;
