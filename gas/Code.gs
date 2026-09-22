@@ -13,7 +13,7 @@
  * 시트는 첫 호출 시 자동 생성됩니다.
  *  - 설정 : 키 | 값(JSON)
  *  - 지역 : ID | 이름 | 대표 | 비고
- *  - 선수 : ID | 이름 | 지역ID | 성별 | 생년 | 에버 | 핸디 | 가감 | 대표 | 조 | 레인 | 순번 | 게임(JSON) | 종목(JSON) | 비고
+ *  - 선수 : ID | 이름 | 지역ID | 성별 | 생년 | 핸디 | 가감 | 대표 | 조 | 레인 | 순번 | 게임(JSON) | 종목(JSON) | 비고
  *  - 팀   : ID | 종목 | 지역ID | 팀명 | 선수(JSON) | 레인 | 핸디 | 가감 | 게임(JSON)
  *  - 결과 : 키 | 데이터(JSON)   ← 확정 스냅샷
  */
@@ -24,7 +24,7 @@ const SH = { settings: '설정', regions: '지역', players: '선수', teams: '�
 const H = {
   settings: ['키', '값'],
   regions: ['ID', '이름', '대표', '비고'],
-  players: ['ID', '이름', '지역ID', '성별', '생년', '에버', '핸디', '가감', '대표', '조', '레인', '순번', '게임', '종목', '비고'],
+  players: ['ID', '이름', '지역ID', '성별', '생년', '핸디', '가감', '대표', '조', '레인', '순번', '게임', '종목', '비고'],
   teams: ['ID', '종목', '지역ID', '팀명', '선수', '레인', '핸디', '가감', '게임'],
   results: ['키', '데이터']
 };
@@ -136,14 +136,14 @@ function deleteRegion(ss, id) {
 function getPlayers(ss) {
   return rows(ss, 'players').map(r => ({
     id: str(r[0]), name: str(r[1]), regionId: str(r[2]), gender: str(r[3]) === 'F' ? 'F' : 'M',
-    birthYear: Number(r[4]) || '', avg: Number(r[5]) || 0, handicap: Number(r[6]) || 0, adjust: Number(r[7]) || 0,
-    isRep: r[8] === true || r[8] === 1 || str(r[8]) === '1' || str(r[8]) === 'TRUE',
-    group: str(r[9]), lane: r[10] === '' ? '' : Number(r[10]) || '', pos: r[11] === '' ? '' : Number(r[11]) || '',
-    games: parseJson(r[12], []), events: parseJson(r[13], { individual: true }), note: str(r[14])
+    birthYear: Number(r[4]) || '', handicap: Number(r[5]) || 0, adjust: Number(r[6]) || 0,
+    isRep: r[7] === true || r[7] === 1 || str(r[7]) === '1' || str(r[7]) === 'TRUE',
+    group: str(r[8]), lane: r[9] === '' ? '' : Number(r[9]) || '', pos: r[10] === '' ? '' : Number(r[10]) || '',
+    games: parseJson(r[11], []), events: parseJson(r[12], { individual: true }), note: str(r[13])
   }));
 }
 function playerRow(p) {
-  return [p.id, p.name || '', p.regionId || '', p.gender === 'F' ? 'F' : 'M', Number(p.birthYear) || '', Number(p.avg) || 0,
+  return [p.id, p.name || '', p.regionId || '', p.gender === 'F' ? 'F' : 'M', Number(p.birthYear) || '',
     Number(p.handicap) || 0, Number(p.adjust) || 0, p.isRep ? 1 : 0,
     p.group || '', p.lane === '' || p.lane == null ? '' : Number(p.lane), p.pos === '' || p.pos == null ? '' : Number(p.pos),
     JSON.stringify(p.games || []), JSON.stringify(p.events || { individual: true }), p.note || ''];

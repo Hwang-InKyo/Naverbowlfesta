@@ -104,7 +104,7 @@
       const total = g.scratch + handicap * g.gamesPlayed + adjust;
       return {
         playerId: p.id, name: p.name, regionId: p.regionId, regionName: region.name || '(미정)', gender: p.gender === 'F' ? 'F' : 'M',
-        avg: num(p.avg), birthYear: num(p.birthYear) || '', handicap, baseHandicap, bonus, adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
+        birthYear: num(p.birthYear) || '', handicap, baseHandicap, bonus, adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
         ...g, total, score: s.basis === 'scratch' ? g.scratch : total,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0
       };

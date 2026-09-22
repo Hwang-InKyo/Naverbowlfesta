@@ -21,8 +21,9 @@
     players.forEach(p => { if (!byRegion.has(p.regionId)) byRegion.set(p.regionId, []); byRegion.get(p.regionId).push(p); });
     // 큰 지역부터, 지역 안에서는 성별 교차 + 에버 순으로 라운드로빈
     [...byRegion.values()].sort((a, b) => b.length - a.length).forEach(list => {
-      const m = list.filter(p => p.gender !== 'F').sort((a, b) => num(b.avg) - num(a.avg));
-      const f = list.filter(p => p.gender === 'F').sort((a, b) => num(b.avg) - num(a.avg));
+      const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+      const m = list.filter(p => p.gender !== 'F').sort(byName);
+      const f = list.filter(p => p.gender === 'F').sort(byName);
       const ordered = []; while (m.length || f.length) { if (m.length) ordered.push(m.shift()); if (f.length) ordered.push(f.shift()); }
       // 이 지역의 시작 조는 현재 가장 적게 찬 조
       let start = gids.indexOf(gids.slice().sort((a, b) => load[a] - load[b])[0]);

@@ -27,7 +27,7 @@
 | 탭 | 내용 |
 |---|---|
 | 홈 | 대회 정보, 일정, 경기 규정 안내, 종목별 입력 진행률, 지역 종합·개인전 현재 순위 |
-| 선수 | 참가 선수 명단(지역/성별/검색), 생년, 핸디, 가감, 조·레인, 출전 종목. 관리자: 지역 관리, 선수 등록/수정(핸디 직접 입력), 신청서 일괄 등록 |
+| 선수 | 참가 선수 명단(지역/성별/검색), 생년, 핸디, 가감, 조·레인, 출전 종목 (기준 에버는 대회 성적과 무관하므로 없음). 관리자: 지역 관리, 선수 등록/수정(핸디 직접 입력), 신청서 일괄 등록 |
 | 배정 | 개인전 조별 레인표, 스카치/베이커 팀. 관리자: 조 자동 편성(지역별 균등), 레인 자동 배정(같은 지역 분산), 팀 만들기(팀 핸디·가감 입력), 직접 수정 |
 | 개인전 | 남/여/전체/조별 순위. 관리자: 조별 점수 입력(자동 저장) |
 | 스카치 · 베이커 | 팀 순위. 관리자: 점수 입력 |
@@ -63,9 +63,9 @@ python3 -m http.server 8080   # http://localhost:8080
 
 선수 탭 → 신청서 일괄 등록에 한 줄에 한 명씩 붙여넣기:
 ```
-이름,지역,성별(남/여),에버,종목,대표,생년,핸디
-홍길동,서울,남,185,개인 스카치,대표,1975,0
-김영희,서울,여,160,개인 베이커,,1980,15
+이름,지역,성별(남/여),생년,핸디,종목,대표
+홍길동,서울,남,1975,0,개인 스카치,대표
+김영희,서울,여,1980,15,개인 베이커
 ```
 엑셀 신청서 양식이 확정되면 파일 업로드로 교체 예정.
 
@@ -89,7 +89,7 @@ settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', l
            groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker},
            repCount, points:{individualM,individualF,reps,scotch,baker}, schedule, rulesNote }
 region   { id, name, leader, note }
-player   { id, name, regionId, gender, birthYear, avg, handicap, adjust, isRep, group, lane, pos, games[], events:{individual,scotch,baker}, note }
+player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane, pos, games[], events:{individual,scotch,baker}, note }
 team     { id, event:'scotch'|'baker', regionId, name, members:[playerId], lane, handicap, adjust, games[] }
 results  확정 스냅샷 (Ranking.regionStandings 결과)
 ```

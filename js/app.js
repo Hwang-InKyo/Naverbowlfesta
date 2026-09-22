@@ -152,7 +152,7 @@
       const ep = state.editPlayer; const ev = (ep && ep.events) || { individual: true };
       html += `<div class="card"><h2>${ep && ep.id ? '선수 수정' : '선수 등록'}</h2><form data-form="save-player" data-id="${esc(ep ? ep.id || '' : '')}">
         <div class="form-row"><div class="form-group"><label>이름</label><input type="text" name="name" required value="${esc(ep ? ep.name : '')}"></div><div class="form-group"><label>지역</label><select name="regionId" required>${regionOptions(ep ? ep.regionId : state.playersRegion, '선택')}</select></div><div class="form-group"><label>성별</label><select name="gender"><option value="M" ${ep && ep.gender === 'F' ? '' : 'selected'}>남</option><option value="F" ${ep && ep.gender === 'F' ? 'selected' : ''}>여</option></select></div></div>
-        <div class="form-row"><div class="form-group"><label>생년 (동점 시 연장자 순)</label><input type="number" name="birthYear" placeholder="예: 1975" value="${esc(ep && ep.birthYear ? ep.birthYear : '')}"></div><div class="form-group"><label>에버 (참고)</label><input type="number" name="avg" value="${esc(ep && ep.avg ? ep.avg : '')}"></div><div class="form-group"><label>핸디 (게임당)</label><input type="number" name="handicap" value="${esc(ep && ep.handicap != null ? ep.handicap : 0)}"></div><div class="form-group"><label>총점 가감 (예: 프로 -21)</label><input type="number" name="adjust" value="${esc(ep && ep.adjust ? ep.adjust : 0)}"></div><div class="form-group"><label>조</label><select name="group">${groupOptions(ep ? ep.group : '', '미편성')}</select></div></div>
+        <div class="form-row"><div class="form-group"><label>생년 (동점 시 연장자 순)</label><input type="number" name="birthYear" placeholder="예: 1975" value="${esc(ep && ep.birthYear ? ep.birthYear : '')}"></div><div class="form-group"><label>핸디 (게임당)</label><input type="number" name="handicap" value="${esc(ep && ep.handicap != null ? ep.handicap : 0)}"></div><div class="form-group"><label>총점 가감 (예: 프로 -21)</label><input type="number" name="adjust" value="${esc(ep && ep.adjust ? ep.adjust : 0)}"></div><div class="form-group"><label>조</label><select name="group">${groupOptions(ep ? ep.group : '', '미편성')}</select></div></div>
         <p class="muted small mb">핸디는 규정(여성 15, 시니어 1~5, 최고 20, 장애 7 등)에 따라 관리자가 직접 입력합니다. 조 보너스(설정의 조별 +점)는 자동으로 더해집니다. 감점(클럽티 -10/게임 등)은 핸디에 음수로, 프로 -21은 총점 가감에 입력하세요.</p>
         <div class="form-group"><label>출전 종목 / 대표</label><div class="row">
           <label class="checkbox-item"><input type="checkbox" name="ev_individual" ${ev.individual !== false ? 'checked' : ''}> 개인전</label>
@@ -161,19 +161,19 @@
           <label class="checkbox-item"><input type="checkbox" name="isRep" ${ep && ep.isRep ? 'checked' : ''}> <b>지역 대표</b></label></div></div>
         <div class="form-group"><label>비고</label><input type="text" name="note" value="${esc(ep ? ep.note : '')}"></div>
         <div class="row"><button class="btn btn-small btn-primary" type="submit">저장</button>${ep ? '<button class="btn btn-small btn-outline" type="button" data-action="cancel-player">취소</button>': ''}</div></form></div>`;
-      html += `<div class="card"><h2>신청서 일괄 등록</h2><p class="muted small mb">한 줄에 한 명: <code>이름,지역,성별(남/여),에버,종목,대표,생년,핸디</code><br>종목은 "개인 스카치 베이커" 중 출전하는 것을 띄어쓰기로 (비우면 개인전만). 대표는 "대표" 또는 O.<br>지역이 없으면 자동 생성됩니다. 엑셀 신청서 양식이 정해지면 파일 업로드로 바꿀 예정입니다.</p>
-        <form data-form="import-players"><textarea name="csv" placeholder="홍길동,서울,남,185,개인 스카치,대표,1975,0&#10;김영희,서울,여,160,개인 베이커,,1980,15"></textarea>
+      html += `<div class="card"><h2>신청서 일괄 등록</h2><p class="muted small mb">한 줄에 한 명: <code>이름,지역,성별(남/여),생년,핸디,종목,대표</code><br>종목은 "개인 스카치 베이커" 중 출전하는 것을 띄어쓰기로 (비우면 개인전만). 대표는 "대표" 또는 O.<br>지역이 없으면 자동 생성됩니다. 엑셀 신청서 양식이 정해지면 파일 업로드로 바꿀 예정입니다.</p>
+        <form data-form="import-players"><textarea name="csv" placeholder="홍길동,서울,남,1975,0,개인 스카치,대표&#10;김영희,서울,여,1980,15,개인 베이커"></textarea>
         <div class="row mt"><label class="checkbox-item"><input type="checkbox" name="replace"> 기존 선수·팀 전체 삭제 후 등록</label><button class="btn btn-small btn-primary" type="submit">가져오기</button></div></form></div>`;
     }
     const q = state.playersQ.trim();
     const rows = Ranking.playerRows(d.players, d.regions, s).filter(r => (!state.playersRegion || r.regionId === state.playersRegion) && (!state.playersGender || r.gender === state.playersGender) && (!q || r.name.includes(q)));
-    rows.sort((a, b) => a.regionName.localeCompare(b.regionName, 'ko') || (b.isRep - a.isRep) || b.avg - a.avg);
+    rows.sort((a, b) => a.regionName.localeCompare(b.regionName, 'ko') || (b.isRep - a.isRep) || a.name.localeCompare(b.name, 'ko'));
     const pMap = new Map(d.players.map(p => [p.id, p]));
     html += `<div class="card"><h2>참가 선수 (${rows.length}/${d.players.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#players-table" data-name="참가선수">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
       <div class="form-row mb"><div class="form-group"><select data-change="players-region">${regionOptions(state.playersRegion, '전체 지역')}</select></div><div class="form-group"><select data-change="players-gender"><option value="">남녀 전체</option><option value="M" ${state.playersGender === 'M' ? 'selected' : ''}>남자</option><option value="F" ${state.playersGender === 'F' ? 'selected' : ''}>여자</option></select></div><div class="form-group"><input type="text" data-input="players-q" placeholder="이름 검색" value="${esc(state.playersQ)}"></div></div>
       <p class="muted small mb">핸디는 게임당 점수이며 조 보너스 포함 · 가감은 총점에 한 번 적용 · <span class="badge rep-badge">대표</span> 지역 대표 (지역당 ${s.repCount}명)</p>
-      <div class="table-scroll"><table class="tbl" id="players-table"><thead><tr><th class="left">이름</th><th class="left">지역</th><th>성별</th><th>생년</th><th>에버</th><th>핸디</th><th>가감</th><th>조</th><th>레인</th><th class="left">종목</th>${isAdmin() ? '<th></th>': ''}</tr></thead><tbody>
-      ${rows.map(r => { const p = pMap.get(r.playerId); return `<tr><td class="left"><b>${esc(r.name)}</b>${r.isRep ? ' <span class="badge rep-badge">대표</span>': ''}</td><td class="left">${esc(r.regionName)}</td><td>${genderBadge(r.gender)}</td><td>${r.birthYear || '-'}</td><td>${r.avg || '-'}</td><td>${r.handicap}${r.bonus ? `<small class="muted"> (${r.baseHandicap}+${r.bonus})</small>` : ''}</td><td>${r.adjust ? r.adjust : '-'}</td><td>${esc(groupName(r.group))}</td><td>${r.lane ? r.lane + '-' + r.pos : '-'}</td><td class="left">${evChips(p.events)}</td>${isAdmin() ? `<td class="nowrap"><button class="btn btn-xs btn-outline" data-action="edit-player" data-id="${esc(p.id)}">수정</button> <button class="btn btn-xs btn-danger" data-action="del-player" data-id="${esc(p.id)}">삭제</button></td>` : ''}</tr>`; }).join('') || '<tr><td colspan="11" class="empty">선수가 없습니다.</td></tr>'}
+      <div class="table-scroll"><table class="tbl" id="players-table"><thead><tr><th class="left">이름</th><th class="left">지역</th><th>성별</th><th>생년</th><th>핸디</th><th>가감</th><th>조</th><th>레인</th><th class="left">종목</th>${isAdmin() ? '<th></th>': ''}</tr></thead><tbody>
+      ${rows.map(r => { const p = pMap.get(r.playerId); return `<tr><td class="left"><b>${esc(r.name)}</b>${r.isRep ? ' <span class="badge rep-badge">대표</span>': ''}</td><td class="left">${esc(r.regionName)}</td><td>${genderBadge(r.gender)}</td><td>${r.birthYear || '-'}</td><td>${r.handicap}${r.bonus ? `<small class="muted"> (${r.baseHandicap}+${r.bonus})</small>` : ''}</td><td>${r.adjust ? r.adjust : '-'}</td><td>${esc(groupName(r.group))}</td><td>${r.lane ? r.lane + '-' + r.pos : '-'}</td><td class="left">${evChips(p.events)}</td>${isAdmin() ? `<td class="nowrap"><button class="btn btn-xs btn-outline" data-action="edit-player" data-id="${esc(p.id)}">수정</button> <button class="btn btn-xs btn-danger" data-action="del-player" data-id="${esc(p.id)}">삭제</button></td>` : ''}</tr>`; }).join('') || '<tr><td colspan="10" class="empty">선수가 없습니다.</td></tr>'}
       </tbody></table></div></div>`;
     return html;
   }
@@ -216,12 +216,12 @@
     if (isAdmin()) {
       const reg = state.teamRegion || (d.regions[0] && d.regions[0].id) || '';
       const inTeam = new Set(d.teams.filter(t => t.event === event).flatMap(t => t.members));
-      const cands = d.players.filter(p => p.regionId === reg && !inTeam.has(p.id) && (!p.events || p.events[event])).sort((a, b) => a.gender.localeCompare(b.gender) || b.avg - a.avg);
+      const cands = d.players.filter(p => p.regionId === reg && !inTeam.has(p.id) && (!p.events || p.events[event])).sort((a, b) => a.gender.localeCompare(b.gender) || a.name.localeCompare(b.name, 'ko'));
       const hint = event === 'scotch' ? '남 1명 + 여 1명' : '3명';
       html += `<div class="card"><h2>${ev.name} 팀 만들기</h2><p class="muted small mb">팀 구성: ${hint} · 해당 종목에 출전 신청한 선수만 표시됩니다.</p>
         <div class="form-row"><div class="form-group"><label>지역</label><select data-change="team-region">${regionOptions(reg)}</select></div><div class="form-group"><label>팀명 (선택)</label><input type="text" id="team-name" placeholder="비우면 선수명"></div><div class="form-group"><label>팀 핸디 (게임당)</label><input type="number" id="team-handicap" value="0"></div><div class="form-group"><label>총점 가감</label><input type="number" id="team-adjust" value="0"></div></div>
         <p class="muted small mb">규정 예: 베이커 여자 1명 +3, 2명 이상 +5 · 장애인 +3 · 프로 -3 (게임당, 핸디에 합산해 입력)</p>
-        <div class="checkbox-grid">${cands.map(p => `<label class="checkbox-item"><input type="checkbox" class="team-cb" value="${esc(p.id)}" data-gender="${p.gender}"> ${esc(p.name)} <small>${p.gender === 'F' ? '여' : '남'}${p.avg ? ' · ' + p.avg : ''}</small></label>`).join('') || '<span class="muted small">선택 가능한 선수가 없습니다.</span>'}</div>
+        <div class="checkbox-grid">${cands.map(p => `<label class="checkbox-item"><input type="checkbox" class="team-cb" value="${esc(p.id)}" data-gender="${p.gender}"> ${esc(p.name)} <small>${p.gender === 'F' ? '여' : '남'}${p.handicap ? ' · 핸디 ' + p.handicap : ''}</small></label>`).join('') || '<span class="muted small">선택 가능한 선수가 없습니다.</span>'}</div>
         <div class="row mt"><button class="btn btn-small btn-primary" data-action="add-team" data-event="${event}">팀 등록</button>
         <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="${event}">레인 자동 배정</button>
         <input type="number" id="team-lane-from" value="${s.laneFrom || 1}" style="width:70px" title="시작 레인"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="레인당 팀 수"></div></div>`;
@@ -452,7 +452,7 @@
       case 'save-player': {
         if (!v('regionId')) return toast('지역을 선택하세요.', true);
         const ex = f.dataset.id ? playerById(f.dataset.id) : null;
-        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', avg: num(v('avg')), handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), } };
+        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), } };
         if (d.players.some(x => x.id !== p.id && x.regionId === p.regionId && x.name === p.name)) return toast('같은 지역에 동명 선수가 있습니다.', true);
         const r = await run(async () => { d.players = await Store.savePlayers([p]); return true; }, '저장되었습니다.'); if (r) { state.editPlayer = null; render(); } return;
       }
@@ -461,12 +461,12 @@
         const errors = [], list = [], newRegions = []; const hcGiven = p => p._hcGiven;
         const regionByName = name => d.regions.find(r => r.name === name) || newRegions.find(r => r.name === name);
         lines.forEach((l, i) => {
-          const [name, rname, g, avg, evs, rep, by, hc] = l.split(',').map(x => (x || '').trim());
+          const [name, rname, g, by, hc, evs, rep] = l.split(',').map(x => (x || '').trim());
           if (!name || !rname) { errors.push(`${i + 1}행: 이름/지역 없음`); return; }
           let region = regionByName(rname);
           if (!region) { region = { id: Store.uid('r'), name: rname, leader: '', note: '' }; newRegions.push(region); }
           const evText = evs || '개인';
-          list.push({ name, regionId: region.id, gender: /^(F|여|여자)$/i.test(g) ? 'F' : 'M', avg: num(avg), birthYear: by ? num(by) : '', handicap: num(hc), _hcGiven: hc !== '' && hc != null, adjust: 0, isRep: /대표|O|o|Y|1/.test(rep || ''), group: '', lane: '', pos: '', games: Array(s.games.individual).fill(null), note: '',
+          list.push({ name, regionId: region.id, gender: /^(F|여|여자)$/i.test(g) ? 'F' : 'M', birthYear: by ? num(by) : '', handicap: num(hc), _hcGiven: hc !== '' && hc != null, adjust: 0, isRep: /대표|O|o|Y|1/.test(rep || ''), group: '', lane: '', pos: '', games: Array(s.games.individual).fill(null), note: '',
             events: { individual: /개인/.test(evText) || !/스카치|베이커/.test(evText), scotch: /스카치/.test(evText), baker: /베이커/.test(evText) } });
         });
         if (errors.length && !confirm(`오류 ${errors.length}건은 건너뜁니다:\n${errors.slice(0, 5).join('\n')}\n\n${list.length}명을 가져올까요?`)) return;
@@ -477,7 +477,7 @@
           for (const nr of newRegions) d.regions = await Store.saveRegion(nr);
           if (replace) { const res = await Store.replacePlayers(list); d.players = res.players; d.teams = res.teams; }
           else {
-            const merged = list.map(p => { const ex = d.players.find(x => x.regionId === p.regionId && x.name === p.name); return ex ? { ...ex, gender: p.gender, avg: p.avg, birthYear: p.birthYear || ex.birthYear, handicap: hcGiven(p) ? p.handicap : ex.handicap, isRep: p.isRep, events: p.events } : p; });
+            const merged = list.map(p => { const ex = d.players.find(x => x.regionId === p.regionId && x.name === p.name); return ex ? { ...ex, gender: p.gender, birthYear: p.birthYear || ex.birthYear, handicap: hcGiven(p) ? p.handicap : ex.handicap, isRep: p.isRep, events: p.events } : p; });
             d.players = await Store.savePlayers(merged);
           }
           return true;

@@ -15,21 +15,22 @@ const SampleData = (() => {
   const F = ['이승미', '김선미', '박소라', '최윤아', '서지원', '조은별', '정빛나', '배수지', '권유리', '백설아', '송미래', '류하린', '김태희', '전지현', '손예진', '한지민', '박보영', '김고은', '아이유', '수지', '윤아', '태연', '제니', '지수'];
 
   const rand = rng(2026);
-  const players = [];
+  const players = []; const skillOf = {};
   let mi = 0, fi = 0;
   regions.forEach((r, ri) => {
     for (let i = 0; i < 12; i++) {
       const isF = i % 3 === 2;
       const name = isF ? F[fi++ % F.length] : M[mi++ % M.length];
-      const avg = Math.round(isF ? 140 + rand() * 45 : 160 + rand() * 45);
+      const skill = Math.round(isF ? 140 + rand() * 45 : 160 + rand() * 45);
       const birthYear = 1960 + Math.floor(rand() * 40);
       const senior = birthYear <= 1962 ? 5 : birthYear <= 1966 ? 1967 - birthYear : 0;
       const handicap = Math.min(20, (isF ? 15 : 0) + senior);
       players.push({
-        id: 'p_' + r.id.slice(2) + '_' + (i + 1), name, regionId: r.id, gender: isF ? 'F' : 'M', avg, birthYear, handicap, adjust: 0,
+        id: 'p_' + r.id.slice(2) + '_' + (i + 1), name, regionId: r.id, gender: isF ? 'F' : 'M', birthYear, handicap, adjust: 0,
         isRep: i < 3, group: '', lane: '', pos: '', games: [null, null, null],
         events: { individual: true, scotch: i < 4, baker: i >= 4 && i < 10 }, note: ''
       });
+      skillOf['p_' + r.id.slice(2) + '_' + (i + 1)] = skill;
     }
   });
 
@@ -57,7 +58,7 @@ const SampleData = (() => {
     // 점수: 1조 완료, 2조 2게임, 3조 미입력
     players.forEach(p => {
       const n = p.group === 'A' ? 3 : p.group === 'B' ? 2 : 0;
-      p.games = [0, 1, 2].map(i => i < n ? game(p.avg) : null);
+      p.games = [0, 1, 2].map(i => i < n ? game(skillOf[p.id]) : null);
     });
     // 팀 편성
     const teams = [];
