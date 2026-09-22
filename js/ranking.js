@@ -5,12 +5,16 @@
  *  - individual : 개인전 3게임 (남/여 각각 순위)
  *  - scotch     : 스카치 더블 (남1 여1, 2게임)
  *  - baker      : 베이커 (3인, 2게임)
- *  - team5      : 지역 대표 5인조 (1게임, 이벤트)
  *
- * 지역 종합 포인트
- *  - 개인전 남/여 상위 N명 순위 포인트
- *  - 지역 대표(repCount명) 개인전 점수 합계 → 지역 순위 포인트
- *  - 스카치 / 베이커 상위 팀 순위 포인트
+ * 핸디: 규정 계산 없이 관리자가 선수별(게임당)·팀별(게임당)로 직접 입력한다.
+ *       조별 보너스(예: 1조 +10)는 설정의 groups[].bonus 로 자동 가산.
+ *       총점 가감(예: 프로 -21)은 선수/팀의 adjust 로 입력.
+ * 동점: 총점 → 스크래치(비핸디) → 하이게임 → 로우게임 → 연장자(생년 빠른 순)
+ *
+ * 지역 종합 포인트 (기본 배점)
+ *  - 개인전 남자 상위 5명: 5·4·3·2·1 / 개인전 여자 상위 3명: 3·2·1
+ *  - 3인조: 지역 대표(repCount명) 개인전 점수 합계 → 지역 순위 3·2·1
+ *  - 스카치 / 베이커 상위 3팀: 3·2·1
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -20,22 +24,19 @@
   const EVENTS = {
     individual: { key: 'individual', name: '개인전', games: 3, size: 1 },
     scotch: { key: 'scotch', name: '스카치 더블', games: 2, size: 2 },
-    baker: { key: 'baker', name: '베이커', games: 2, size: 3 },
-    team5: { key: 'team5', name: '지역 대표 5인조', games: 1, size: 5 }
+    baker: { key: 'baker', name: '베이커', games: 2, size: 3 }
   };
 
   const DEFAULT_SETTINGS = {
     name: '전국대회', venue: '', dates: ['', ''], lanes: 20, laneFrom: 1,
     status: 'ready', // ready | live | final
-    handicap: { type: 'diff', base: 200, rate: 0.8, cap: 60, femaleBonus: 8 },
     basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
-    teamHandicap: { scotch: 'avg', baker: 'avg', team5: 'none' }, // avg | sum | none
-    games: { individual: 3, scotch: 2, baker: 2, team5: 1 },
-    groups: [{ id: 'A', name: '1조', day: 1, time: '' }, { id: 'B', name: '2조', day: 1, time: '' }, { id: 'C', name: '3조', day: 2, time: '' }],
+    games: { individual: 3, scotch: 2, baker: 2 },
+    groups: [{ id: 'A', name: '1조', day: 1, time: '', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '', bonus: 0 }],
+    rulesNote: '개인전: 1인 3게임 총점, 매 게임 우측 4테이블 이동. 남자 1~5위, 여자 1~5위 시상.\n동점: 비핸디 → 하이/로우 → 연장자 순.\n1조(일요일 첫 경기) 핸디 +10점.\n핸디(개인전, 게임당): 여성 15, 시니어(만 60세 이상) 연도별 1~5점, 최고 20점. 장애인 4급 이상 7점(사전 통보).\n스카치: 팀당 2게임, 남녀 2인(여자 초구), 여자 회원 없는 클럽 제외. 장애인 +3/게임. 1~3위 시상.\n베이커: 팀당 2게임, 여자 1명 +3, 여자 2명 이상 +5, 장애인 +3 (게임당). 1~3위 시상.\n감점: 클럽티 미착용 -10/게임, 복장 불이행 -5/게임. 프로: 개인전 총점 -21, 스카치·베이커 -3/게임.',
     perLane: 4,
     repCount: 3,
-    points: { individual: [5, 4, 3, 2, 1], reps: [5, 4, 3, 2, 1], scotch: [3, 2, 1], baker: [3, 2, 1] },
-    countTeam5: false
+    points: { individualM: [5, 4, 3, 2, 1], individualF: [3, 2, 1], reps: [3, 2, 1], scotch: [3, 2, 1], baker: [3, 2, 1] }
   };
 
   function num(v, d = 0) { const n = Number(v); return Number.isFinite(n) ? n : d; }
@@ -43,28 +44,24 @@
     const d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if (!s) return d;
     const out = { ...d, ...s };
-    ['handicap', 'teamHandicap', 'games', 'points'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
+    ['games', 'points'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
+    delete out.handicap; delete out.teamHandicap;
+    // 이전 형식(points.individual 하나) 호환
+    if (s.points && s.points.individual && !s.points.individualM) { out.points.individualM = s.points.individual; if (!s.points.individualF) out.points.individualF = s.points.individual; }
+    delete out.points.individual; delete out.points.team5; delete out.countTeam5;
     if (!Array.isArray(out.groups) || !out.groups.length) out.groups = d.groups;
     return out;
   }
 
-  /** 게임당 개인 핸디 */
-  function calcHandicap(avg, gender, rule) {
-    rule = rule || DEFAULT_SETTINGS.handicap;
-    if (!rule || rule.type === 'none') return 0;
-    let h = 0;
-    if (rule.type === 'diff') {
-      const rate = rule.rate === '' || rule.rate == null ? 1 : num(rule.rate, 1);
-      h = Math.floor(Math.max(0, num(rule.base) - num(avg)) * rate);
-      if (rule.cap !== '' && rule.cap != null) h = Math.min(h, num(rule.cap));
-    }
-    if (gender === 'F' && rule.femaleBonus) h += num(rule.femaleBonus);
-    return h;
+  /** 조 보너스 (게임당) */
+  function groupBonus(groupId, settings) {
+    const g = (settings.groups || []).find(x => x.id === groupId);
+    return g ? num(g.bonus) : 0;
   }
 
-  function playerHandicap(p, rule) {
-    if (p.handicapOverride != null && p.handicapOverride !== '') return num(p.handicapOverride);
-    return calcHandicap(p.avg, p.gender, rule);
+  /** 게임당 개인 핸디 = 관리자 입력 핸디 + 조 보너스 */
+  function playerHandicap(p, settings) {
+    return num(p.handicap) + groupBonus(p.group, mergeSettings(settings));
   }
 
   function makeComparator(keys, nameKey) {
@@ -89,7 +86,7 @@
     for (let i = 0; i < n; i++) { const g = (games || [])[i]; arr.push(g === '' || g == null ? null : num(g)); }
     const played = arr.filter(g => g != null);
     const scratch = played.reduce((s, g) => s + g, 0);
-    return { games: arr, gamesPlayed: played.length, scratch, high: played.length ? Math.max(...played) : 0, lastGame: played.length ? played[played.length - 1] : 0 };
+    return { games: arr, gamesPlayed: played.length, scratch, high: played.length ? Math.max(...played) : 0, low: played.length ? Math.min(...played) : 0, lastGame: played.length ? played[played.length - 1] : 0 };
   }
 
   // ===== 개인전 =====
@@ -99,32 +96,30 @@
     const n = num(s.games.individual, 3);
     return (players || []).map(p => {
       const g = gameStats(p.games, n);
-      const handicap = playerHandicap(p, s.handicap);
+      const baseHandicap = num(p.handicap);
+      const bonus = groupBonus(p.group, s);
+      const handicap = baseHandicap + bonus;
+      const adjust = g.gamesPlayed ? num(p.adjust) : 0;
       const region = rMap.get(p.regionId) || {};
-      const total = g.scratch + handicap * g.gamesPlayed;
+      const total = g.scratch + handicap * g.gamesPlayed + adjust;
       return {
         playerId: p.id, name: p.name, regionId: p.regionId, regionName: region.name || '(미정)', gender: p.gender === 'F' ? 'F' : 'M',
-        avg: num(p.avg), handicap, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
+        avg: num(p.avg), birthYear: num(p.birthYear) || '', handicap, baseHandicap, bonus, adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
         ...g, total, score: s.basis === 'scratch' ? g.scratch : total,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0
       };
     });
   }
 
-  const cmpIndividual = makeComparator([r => r.score, r => r.total, r => r.scratch, r => r.high, r => r.lastGame]);
+  // 총점 → 스크래치(비핸디) → 하이게임 → 로우게임 → 연장자(생년 빠른 순, 미입력은 최후순)
+  const cmpIndividual = makeComparator([r => r.score, r => r.total, r => r.scratch, r => r.high, r => r.low, r => -(num(r.birthYear) || 9999)]);
 
   function individualRanking(rows, filter) {
-    const list = rows.filter(r => r.gamesPlayed > 0 || true).filter(filter || (() => true)).map(r => ({ ...r }));
+    const list = rows.filter(filter || (() => true)).map(r => ({ ...r }));
     return assignRanks(list, cmpIndividual);
   }
 
   // ===== 팀 종목 =====
-  function teamHandicapOf(memberRows, mode) {
-    if (!memberRows.length || mode === 'none') return 0;
-    const sum = memberRows.reduce((s, m) => s + m.handicap, 0);
-    return mode === 'sum' ? sum : Math.floor(sum / memberRows.length);
-  }
-
   function teamRows(teams, event, pRows, regions, settings) {
     const s = mergeSettings(settings);
     const pMap = new Map(pRows.map(r => [r.playerId, r]));
@@ -133,20 +128,21 @@
     return (teams || []).filter(t => t.event === event).map(t => {
       const members = (t.members || []).map(id => pMap.get(id)).filter(Boolean);
       const region = rMap.get(t.regionId) || {};
-      const handicap = teamHandicapOf(members, s.teamHandicap[event] || 'none');
+      const handicap = num(t.handicap);
       const g = gameStats(t.games, n);
+      const adjust = g.gamesPlayed ? num(t.adjust) : 0;
       const memberNames = members.map(m => m.name);
       return {
         teamId: t.id, event, regionId: t.regionId, regionName: region.name || '(미정)',
         name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
-        lane: t.lane || '', handicap, ...g, total: g.scratch + handicap * g.gamesPlayed,
+        lane: t.lane || '', handicap, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
         valid: members.length === EVENTS[event].size
       };
     });
   }
 
-  const cmpTeam = makeComparator([r => r.total, r => r.scratch, r => r.high, r => r.lastGame]);
+  const cmpTeam = makeComparator([r => r.total, r => r.scratch, r => r.high, r => r.low]);
   function teamRanking(rows) { return assignRanks(rows.map(r => ({ ...r })), cmpTeam); }
 
   // ===== 지역 대표 =====
@@ -179,24 +175,22 @@
     const female = individualRanking(pRows, r => r.gender === 'F');
     const scotch = teamRanking(teamRows(data.teams, 'scotch', pRows, regions, s));
     const baker = teamRanking(teamRows(data.teams, 'baker', pRows, regions, s));
-    const team5 = teamRanking(teamRows(data.teams, 'team5', pRows, regions, s));
     const reps = repRanking(pRows, regions, s);
 
     const acc = new Map();
-    regions.forEach(r => acc.set(r.id, { regionId: r.id, regionName: r.name, male: 0, female: 0, reps: 0, scotch: 0, baker: 0, team5: 0, total: 0, details: [] }));
+    regions.forEach(r => acc.set(r.id, { regionId: r.id, regionName: r.name, male: 0, female: 0, reps: 0, scotch: 0, baker: 0, total: 0, details: [] }));
     const add = (regionId, field, pts, detail) => {
       if (!pts || !acc.has(regionId)) return;
       const a = acc.get(regionId); a[field] += pts; a.total += pts; a.details.push({ field, pts, ...detail });
     };
-    male.forEach(r => add(r.regionId, 'male', pointsForRank(r.rank, s.points.individual), { event: '개인전 남자', who: r.name, rank: r.rank }));
-    female.forEach(r => add(r.regionId, 'female', pointsForRank(r.rank, s.points.individual), { event: '개인전 여자', who: r.name, rank: r.rank }));
-    reps.forEach(r => add(r.regionId, 'reps', pointsForRank(r.rank, s.points.reps), { event: '지역 대표', who: r.reps.map(x => x.name).join('·'), rank: r.rank }));
+    male.forEach(r => add(r.regionId, 'male', pointsForRank(r.rank, s.points.individualM), { event: '개인전 남자', who: r.name, rank: r.rank }));
+    female.forEach(r => add(r.regionId, 'female', pointsForRank(r.rank, s.points.individualF), { event: '개인전 여자', who: r.name, rank: r.rank }));
+    reps.forEach(r => add(r.regionId, 'reps', pointsForRank(r.rank, s.points.reps), { event: '3인조(지역 대표)', who: r.reps.map(x => x.name).join('·'), rank: r.rank }));
     scotch.forEach(r => add(r.regionId, 'scotch', pointsForRank(r.rank, s.points.scotch), { event: '스카치', who: r.name, rank: r.rank }));
     baker.forEach(r => add(r.regionId, 'baker', pointsForRank(r.rank, s.points.baker), { event: '베이커', who: r.name, rank: r.rank }));
-    if (s.countTeam5 && Array.isArray(s.points.team5)) team5.forEach(r => add(r.regionId, 'team5', pointsForRank(r.rank, s.points.team5), { event: '5인조', who: r.name, rank: r.rank }));
 
     const standings = assignRanks([...acc.values()], makeComparator([r => r.total, r => r.male + r.female, r => r.reps], r => r.regionName));
-    return { settings: s, playerRows: pRows, male, female, scotch, baker, team5, reps, standings, computedAt: new Date().toISOString() };
+    return { settings: s, playerRows: pRows, male, female, scotch, baker, reps, standings, computedAt: new Date().toISOString() };
   }
 
   /** 확정된 대회는 스냅샷 사용 */
@@ -211,13 +205,13 @@
     const ind = (data.players || []).filter(p => p.events ? p.events.individual !== false : true);
     const indDone = ind.filter(p => gameStats(p.games, s.games.individual).gamesPlayed === num(s.games.individual, 3)).length;
     const ev = {};
-    ['scotch', 'baker', 'team5'].forEach(e => {
+    ['scotch', 'baker'].forEach(e => {
       const ts = (data.teams || []).filter(t => t.event === e);
       ev[e] = { total: ts.length, done: ts.filter(t => gameStats(t.games, s.games[e]).gamesPlayed === num(s.games[e], 1)).length };
     });
     return { individual: { total: ind.length, done: indDone }, ...ev };
   }
 
-  return { EVENTS, DEFAULT_SETTINGS, mergeSettings, calcHandicap, playerHandicap, makeComparator, assignRanks, gameStats,
-    playerRows, individualRanking, teamHandicapOf, teamRows, teamRanking, repRanking, pointsForRank, regionStandings, resultsOf, progress };
+  return { EVENTS, DEFAULT_SETTINGS, mergeSettings, groupBonus, playerHandicap, makeComparator, assignRanks, gameStats,
+    playerRows, individualRanking, teamRows, teamRanking, repRanking, pointsForRank, regionStandings, resultsOf, progress };
 });

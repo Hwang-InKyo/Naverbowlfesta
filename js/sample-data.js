@@ -22,10 +22,13 @@ const SampleData = (() => {
       const isF = i % 3 === 2;
       const name = isF ? F[fi++ % F.length] : M[mi++ % M.length];
       const avg = Math.round(isF ? 140 + rand() * 45 : 160 + rand() * 45);
+      const birthYear = 1960 + Math.floor(rand() * 40);
+      const senior = birthYear <= 1962 ? 5 : birthYear <= 1966 ? 1967 - birthYear : 0;
+      const handicap = Math.min(20, (isF ? 15 : 0) + senior);
       players.push({
-        id: 'p_' + r.id.slice(2) + '_' + (i + 1), name, regionId: r.id, gender: isF ? 'F' : 'M', avg,
-        handicapOverride: '', isRep: i < 3, group: '', lane: '', pos: '', games: [null, null, null],
-        events: { individual: true, scotch: i < 4, baker: i >= 4 && i < 10, team5: i % 2 === 0 && i < 10 }, note: ''
+        id: 'p_' + r.id.slice(2) + '_' + (i + 1), name, regionId: r.id, gender: isF ? 'F' : 'M', avg, birthYear, handicap, adjust: 0,
+        isRep: i < 3, group: '', lane: '', pos: '', games: [null, null, null],
+        events: { individual: true, scotch: i < 4, baker: i >= 4 && i < 10 }, note: ''
       });
     }
   });
@@ -34,8 +37,8 @@ const SampleData = (() => {
     ...Ranking.DEFAULT_SETTINGS,
     name: '2026 전국 볼링 페스타', venue: '서울 강남볼링센터 (24레인)', dates: ['2026-10-17', '2026-10-18'], lanes: 24, laneFrom: 1,
     hostRegionId: 'r_seoul', status: 'live', perLane: 4, repCount: 3,
-    groups: [{ id: 'A', name: '1조', day: 1, time: '10:00' }, { id: 'B', name: '2조', day: 1, time: '14:00' }, { id: 'C', name: '3조', day: 2, time: '10:00' }],
-    schedule: '1일차 10:00 1조 개인전 / 14:00 2조 개인전\n2일차 10:00 3조 개인전 / 14:00 스카치·베이커 / 16:30 지역 대표 5인조 / 17:30 시상',
+    groups: [{ id: 'A', name: '1조', day: 1, time: '10:00', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '14:00', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '10:00', bonus: 0 }],
+    schedule: '1일차 10:00 1조 개인전 / 14:00 2조 개인전\n2일차 10:00 3조 개인전 / 14:00 스카치·베이커 / 17:00 시상',
     adminPin: '0000'
   };
 
@@ -62,12 +65,10 @@ const SampleData = (() => {
       const rp = players.filter(p => p.regionId === r.id);
       const men = rp.filter(p => p.gender === 'M'), women = rp.filter(p => p.gender === 'F');
       // 스카치 2팀 (남1 여1)
-      for (let i = 0; i < 2; i++) teams.push({ id: 't_sc_' + r.id.slice(2) + i, event: 'scotch', regionId: r.id, name: '', members: [men[i].id, women[i].id], lane: '', games: [null, null] });
+      for (let i = 0; i < 2; i++) teams.push({ id: 't_sc_' + r.id.slice(2) + i, event: 'scotch', regionId: r.id, name: '', members: [men[i].id, women[i].id], lane: '', handicap: 0, adjust: 0, games: [null, null] });
       // 베이커 1~2팀
       const bk = r.id === 'r_seoul' || r.id === 'r_busan' ? 2 : 1;
-      for (let i = 0; i < bk; i++) teams.push({ id: 't_bk_' + r.id.slice(2) + i, event: 'baker', regionId: r.id, name: '', members: [men[2 + i * 2].id, men[3 + i * 2].id, women[2 + i].id], lane: '', games: [null, null] });
-      // 5인조
-      teams.push({ id: 't_t5_' + r.id.slice(2), event: 'team5', regionId: r.id, name: r.name + ' 대표', members: [men[0].id, men[1].id, men[2].id, women[0].id, women[1].id], lane: '', games: [null] });
+      for (let i = 0; i < bk; i++) teams.push({ id: 't_bk_' + r.id.slice(2) + i, event: 'baker', regionId: r.id, name: '', members: [men[2 + i * 2].id, men[3 + i * 2].id, women[2 + i].id], lane: '', handicap: 3, adjust: 0, games: [null, null] });
     });
     // 스카치 1게임 입력, 레인 배정
     const sc = teams.filter(t => t.event === 'scotch');
