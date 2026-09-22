@@ -10,7 +10,8 @@
     data: null, tab: 'home',
     playersRegion: '', playersGender: '', playersQ: '', editPlayer: null, editRegion: null,
     assignSub: 'A', indSub: 'M', teamSub: { scotch: 'rank', baker: 'rank' }, scoreGroup: '',
-    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: [], scoreImport: null
+    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: [], scoreImport: null,
+    previewPublic: false, q: '', searchId: '', pubAssignSub: '', pubAssignQ: '', rankTab: 'individual', rankGender: 'M', rankGroup: '', rankQ: '', pubAssignId: ''
   };
 
   // ===== 유틸 =====
@@ -27,7 +28,23 @@
   const groupName = id => { const g = S().groups.find(x => x.id === id); return g ? g.name : (id || '미편성'); };
   const regionOptions = (sel, blank) => (blank ? `<option value="">${esc(blank)}</option>` : '') + (state.data.regions || []).map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
   const groupOptions = (sel, blank) => (blank ? `<option value="">${esc(blank)}</option>` : '') + S().groups.map(g => `<option value="${esc(g.id)}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
-  const stat = (v, l) => `<div class="stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`;
+  const stat = (v, l, d, hi) => `<div class="stat"><div class="l">${esc(l)}</div><div class="v ${hi ? 'hi' : ''}">${v}</div>${d ? `<div class="d">${esc(d)}</div>` : ''}</div>`;
+  const ICON = {
+    search: '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+    lanes: '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/></svg>',
+    rank: '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="4" y="12" width="4" height="8"/><rect x="10" y="7" width="4" height="13"/><rect x="16" y="3" width="4" height="17"/></svg>',
+    user: '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
+    arrow: '<svg class="arr" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+    check: '<svg class="ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg>'
+  };
+  const searchBox = (attr, value, placeholder, light) => `<label class="search-box ${light ? 'light' : ''}">${ICON.search.replace('width="21" height="21"', 'width="17" height="17"')}<input type="text" data-input="${attr}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off" aria-label="${esc(placeholder)}"></label>`;
+  const view = () => (isAdmin() && !state.previewPublic) ? 'admin' : 'public';
+  const PUBLIC_TABS = ['home', 'search', 'assign', 'rank'];
+  const ADMIN_TABS = ['home', 'players', 'assign', 'individual', 'scotch', 'baker', 'standings', 'settings'];
+  const ADMIN_TITLES = { home: '대시보드', players: '선수 관리', assign: '조 편성 · 레인 배정', individual: '개인전 점수 · 집계', scotch: '스카치 더블', baker: '베이커', standings: '지역 종합', settings: '설정' };
+  const STATUS_LABEL = { ready: '준비중', live: '진행중', final: '확정' };
+  const dayLabel = () => { const s = S(); const today = new Date().toISOString().slice(0, 10); const i = (s.dates || []).indexOf(today); return i >= 0 ? ' · ' + (i + 1) + '일차' : ''; };
+  const fmtDate = d => { if (!d) return ''; const dt = new Date(d + 'T00:00:00'); if (isNaN(dt)) return d; return `${dt.getMonth() + 1}.${dt.getDate()}(${'일월화수목금토'[dt.getDay()]})`; };
   const evChips = ev => ['individual', 'scotch', 'baker', 'side'].filter(k => ev && ev[k]).map(k => `<span class="ev ${k}">${{ individual: '개인', scotch: '스카치', baker: '베이커', side: '사이드' }[k]}</span>`).join('');
   const gamesOf = (r, n) => r.games.slice(0, n).map(g => `<td>${g == null ? '-' : g}</td>`).join('');
   const gameHeads = n => Array.from({ length: n }, (_, i) => `<th>G${i + 1}</th>`).join('');
@@ -61,33 +78,34 @@
     else await run(fn);
   }
   function applyRole() {
-    const s = S();
-    $('#header-title').textContent = s.name || '전국대회';
-    $('#header-sub').textContent = [s.dates && s.dates[0], s.venue].filter(Boolean).join(' · ');
-    const badge = $('#mode-badge');
-    if (isAdmin()) { badge.textContent = '관리자'; badge.className = 'mode-badge admin'; }
-    else { badge.textContent = Store.mode() === 'remote' ? '서버' : '데모'; badge.className = 'mode-badge ' + Store.mode(); }
-    $('#btn-admin').style.display = isAdmin() ? 'none' : '';
-    $('#btn-logout').style.display = isAdmin() ? '' : 'none';
-    $$('.tab-btn[data-role="admin"]').forEach(b => b.style.display = isAdmin() ? '' : 'none');
-    if (state.tab === 'settings' && !isAdmin()) state.tab = 'home';
+    const s = S(); const admin = view() === 'admin';
+    document.body.classList.toggle('is-admin', admin);
+    document.body.classList.toggle('is-public', !admin);
+    $('#side-title').textContent = s.name || '볼링 전국대회';
+    const st = $('#status-badge'); st.textContent = STATUS_LABEL[s.status] || s.status; st.className = 'badge ' + (s.status === 'final' ? 'final' : s.status === 'live' ? 'live' : 'upcoming');
+    const mb = $('#mode-badge'); mb.textContent = Store.mode() === 'remote' ? '서버 연결' : '데모'; mb.className = 'mode-badge ' + Store.mode();
+    const tabs = admin ? ADMIN_TABS : PUBLIC_TABS;
+    if (!tabs.includes(state.tab)) state.tab = 'home';
     if (!isAdmin()) { state.indSub = state.indSub === 'score' ? 'M' : state.indSub; Object.keys(state.teamSub).forEach(k => { if (state.teamSub[k] === 'score') state.teamSub[k] = 'rank'; }); }
   }
+  function openAdminModal() { $('#admin-error').textContent = ''; $('#admin-pin').value = ''; $('#admin-hint').textContent = Store.mode() === 'local' ? '데모 관리자 PIN: 0000' : ''; $('#admin-modal').style.display = 'flex'; $('#admin-pin').focus(); }
   function bindAdmin() {
-    $('#btn-admin').addEventListener('click', () => { $('#admin-error').textContent = ''; $('#admin-pin').value = ''; $('#admin-hint').textContent = Store.mode() === 'local' ? '데모 관리자 PIN: 0000' : ''; $('#admin-modal').style.display = 'flex'; $('#admin-pin').focus(); });
     $('#admin-cancel').addEventListener('click', () => $('#admin-modal').style.display = 'none');
     $('#admin-modal').addEventListener('click', e => { if (e.target.id === 'admin-modal') $('#admin-modal').style.display = 'none'; });
     $('#admin-form').addEventListener('submit', async e => {
       e.preventDefault(); $('#admin-error').textContent = ''; loading(true);
-      try { await Store.login($('#admin-pin').value); $('#admin-modal').style.display = 'none'; await reload(true); applyRole(); render(); toast('관리자로 로그인했습니다.'); }
+      try { await Store.login($('#admin-pin').value); $('#admin-modal').style.display = 'none'; state.previewPublic = false; state.tab = 'home'; await reload(true); applyRole(); render(); toast('관리자로 로그인했습니다.'); }
       catch (err) { $('#admin-error').textContent = err.message; }
       finally { loading(false); }
     });
-    $('#btn-logout').addEventListener('click', async () => { await flush(); Store.logout(); state.editPlayer = null; state.editRegion = null; await reload(true); applyRole(); render(); toast('로그아웃했습니다.'); });
+    $('#btn-logout').addEventListener('click', async () => { await flush(); Store.logout(); state.editPlayer = null; state.editRegion = null; state.previewPublic = false; state.tab = 'home'; await reload(true); applyRole(); render(); toast('로그아웃했습니다.'); });
+    $('#btn-preview-public').addEventListener('click', async () => { await flush(); state.previewPublic = true; state.tab = 'home'; applyRole(); render(); });
     $('#btn-server').addEventListener('click', () => { const url = prompt('Apps Script 웹앱 URL을 입력하세요.\n비워두면 로컬 데모 모드로 동작합니다.', Store.getApiUrl()); if (url === null) return; Store.setApiUrl(url); location.reload(); });
   }
   function bindGlobal() {
-    $('#main-tabs').addEventListener('click', async e => { const b = e.target.closest('.tab-btn'); if (b) { await flush(); state.tab = b.dataset.tab; render(); } });
+    const nav = async e => { const b = e.target.closest('[data-tab]'); if (b) { await flush(); state.tab = b.dataset.tab; render(); window.scrollTo(0, 0); } };
+    $('#admin-nav').addEventListener('click', nav);
+    $('#bottom-nav').addEventListener('click', nav);
     window.addEventListener('beforeunload', () => { if (state.dirtyPlayers.size || state.dirtyTeams.size) flush(); });
     document.addEventListener('click', onClick);
     document.addEventListener('submit', onSubmit);
@@ -97,11 +115,23 @@
 
   // ===== 렌더 =====
   function render() {
-    $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
-    $$('.tab-content').forEach(s => s.classList.toggle('active', s.id === 'tab-' + state.tab));
+    const admin = view() === 'admin';
+    $$('#admin-nav .side-item').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+    $$('#bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+    $$('.tab-content').forEach(sec => sec.classList.toggle('active', sec.id === 'tab-' + state.tab));
+    if (admin) { $('#topbar-title').textContent = ADMIN_TITLES[state.tab] || ''; $('#topbar-sub').textContent = S().name || ''; }
     const el = $('#tab-' + state.tab);
+    if (!admin) {
+      switch (state.tab) {
+        case 'home': el.innerHTML = renderPublicHome(); break;
+        case 'search': el.innerHTML = renderSearch(); break;
+        case 'assign': el.innerHTML = renderPublicAssign(); break;
+        case 'rank': el.innerHTML = renderRank(); break;
+      }
+      return;
+    }
     switch (state.tab) {
-      case 'home': el.innerHTML = renderHome(); break;
+      case 'home': el.innerHTML = renderAdminHome(); break;
       case 'players': el.innerHTML = renderPlayers(); break;
       case 'assign': el.innerHTML = renderAssign(); break;
       case 'individual': el.innerHTML = renderIndividual(); break;
@@ -113,31 +143,188 @@
   const subtabs = (items, cur, action, attr) => `<div class="subtabs">${items.map(([k, l]) => `<button class="subtab ${cur === k ? 'active' : ''}" data-action="${action}" data-${attr}="${esc(k)}">${l}</button>`).join('')}</div>`;
   const statusBadge = () => { const st = S().status; return `<span class="badge ${st === 'final' ? 'final' : st === 'live' ? 'live' : 'upcoming'}">${{ ready: '준비중', live: '진행중', final: '확정' }[st] || st}</span>`; };
 
-  // ----- 홈 -----
-  function renderHome() {
-    const s = S(); const d = state.data; const res = results(); const pr = Ranking.progress(d);
-    const bar = (l, p) => `<div class="progress-row"><span>${l}</span><div class="progress"><span style="width:${p.total ? Math.round(p.done / p.total * 100) : 0}%"></span></div><span class="right small">${p.done}/${p.total}</span></div>`;
-    const byRegion = d.regions.map(r => ({ name: r.name, n: d.players.filter(p => p.regionId === r.id).length }));
-    let html = `<div class="card"><h2>${esc(s.name)} ${statusBadge()}</h2>
-      <div class="stat-grid">${stat(d.regions.length, '참가 지역')}${stat(d.players.length, '참가 선수')}${stat(d.players.filter(p => p.gender === 'F').length, '여성 선수')}${stat(d.teams.filter(t => t.event === 'scotch').length + '/' + d.teams.filter(t => t.event === 'baker').length, '스카치/베이커 팀')}</div>
-      <p class="small mt"><b>일정:</b> ${esc((s.dates || []).filter(Boolean).join(' ~ ') || '미정')} &nbsp; <b>장소:</b> ${esc(s.venue || '미정')} &nbsp; <b>주최:</b> ${esc(regionName(s.hostRegionId))}</p>
-      ${s.schedule ? `<div class="schedule mt">${esc(s.schedule)}</div>` : ''}</div>`;
-    if (s.rulesNote) html += `<div class="card"><h2>경기 규정</h2><div class="schedule">${esc(s.rulesNote)}</div></div>`;
-    html += `<div class="card"><h2>진행 현황</h2>${bar('개인전', pr.individual)}${bar('스카치', pr.scotch)}${bar('베이커', pr.baker)}</div>`;
-    if (res.standings.some(r => r.total > 0)) html += `<div class="card"><h2>지역 종합 <button class="btn btn-xs btn-outline" data-action="tab" data-tab="standings">자세히</button></h2>${podium(res.standings.slice(0, 3), r => r.regionName, r => r.total + '점')}</div>`;
-    if (res.male.some(r => r.gamesPlayed) || res.female.some(r => r.gamesPlayed)) {
-      html += `<div class="card"><h2>개인전 현재 순위 <button class="btn btn-xs btn-outline" data-action="tab" data-tab="individual">자세히</button></h2>
-        <h3>남자</h3>${podium(res.male.filter(r => r.gamesPlayed).slice(0, 3), r => r.name, r => r.score, r => r.regionName)}<h3>여자</h3>${podium(res.female.filter(r => r.gamesPlayed).slice(0, 3), r => r.name, r => r.score, r => r.regionName)}</div>`;
+  // ===== 회원용 화면 =====
+  const heroBadge = () => { const st = S().status; return `<span class="pill-status ${st}">${STATUS_LABEL[st] || st}${st === 'live' ? dayLabel() : ''}</span>`; };
+  const adminEntry = () => isAdmin() ? `<button class="hero-admin" data-action="back-admin">관리자 화면</button>` : `<button class="hero-admin" data-action="open-admin">관리자</button>`;
+  const groupOf = id => S().groups.find(g => g.id === id);
+  const groupTime = g => g ? [g.day ? g.day + '일차' : '', g.time || ''].filter(Boolean).join(' ') : '';
+  const groupDate = g => { const s = S(); if (!g || !g.day || !s.dates || !s.dates[g.day - 1]) return groupTime(g); return `${fmtDate(s.dates[g.day - 1])} ${g.time || ''}`.trim(); };
+
+  function renderPublicHome() {
+    const s = S(); const d = state.data; const pr = Ranking.progress(d);
+    const dates = (s.dates || []).filter(Boolean);
+    const pct = pr.individual.total ? Math.round(pr.individual.done / pr.individual.total * 100) : 0;
+    const rules = (s.rulesNote || '').split('\n').filter(Boolean);
+    const shown = state.rulesOpen ? rules : rules.slice(0, 3);
+    return `<div class="hero hero-home">
+      <div class="hero-top"><div class="brand-row"><div class="brand-mark sm">볼</div><span class="hero-sub">${esc(regionName(s.hostRegionId))} 주최</span></div><div class="row" style="gap:6px">${heroBadge()}${adminEntry()}</div></div>
+      <h1 class="hero-title">${esc(s.name)}</h1>
+      <p class="hero-meta">${dates.map(fmtDate).join('–')}${s.venue ? ' · ' + esc(s.venue) : ''}</p>
+      <div class="hero-panel"><div class="lbl"><span>개인전 진행률</span><b>${pr.individual.done} / ${pr.individual.total}명</b></div><div class="bar"><span style="width:${pct}%"></span></div></div>
+    </div>
+    <div class="page">
+      <button class="quick" data-action="tab" data-tab="search"><div class="ic">${ICON.search}</div><div><div class="t">선수 검색 · 참가 확인</div><div class="d">이름으로 등록 종목 · 조 · 핸디 확인하기</div></div>${ICON.arrow}</button>
+      <button class="quick" data-action="tab" data-tab="assign"><div class="ic">${ICON.lanes}</div><div><div class="t">레인 배정 확인</div><div class="d">내 레인 · 순번 · 시작 시간</div></div>${ICON.arrow}</button>
+      <button class="quick" data-action="tab" data-tab="rank"><div class="ic">${ICON.rank}</div><div><div class="t">실시간 순위</div><div class="d">개인전 · 스카치 · 베이커 · 지역종합</div></div>${ICON.arrow}</button>
+      <div class="card" style="margin:0"><h2 style="margin-bottom:8px">대회 안내</h2>
+        ${s.schedule ? `<div class="schedule">${esc(s.schedule)}</div>` : ''}
+        ${rules.length ? `<div class="schedule" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">${shown.map(esc).join('\n')}</div>${rules.length > 3 ? `<button class="rules-toggle" data-action="toggle-rules">${state.rulesOpen ? '접기' : `규정 전체 보기 (${rules.length - 3}줄 더)`}</button>` : ''}` : ''}
+        ${!s.schedule && !rules.length ? '<p class="empty">안내 문구가 없습니다.</p>' : ''}</div>
+    </div>`;
+  }
+
+  function findPlayers(q) { q = (q || '').trim(); if (!q) return []; const n = q.replace(/\s+/g, ''); return state.data.players.filter(p => p.name.replace(/\s+/g, '').includes(n)); }
+  function resolvePlayer(q, chosenId) {
+    const list = findPlayers(q);
+    if (chosenId) { const c = list.find(p => p.id === chosenId); if (c) return { list, one: c }; }
+    if (list.length === 1) return { list, one: list[0] };
+    const exact = list.filter(p => p.name === q.trim()); if (exact.length === 1) return { list, one: exact[0] };
+    return { list, one: null };
+  }
+
+  function renderSearch() {
+    const s = S(); const d = state.data;
+    let html = `<div class="hero"><div class="hero-eyebrow">${esc(s.name)}</div><h1 class="hero-title sm">선수 검색</h1>${searchBox('pub-q', state.q, '이름으로 검색')}</div><div class="page">`;
+    if (!state.q.trim()) return html + `<div class="section-label">안내</div><div class="card" style="margin:0"><p class="small" style="color:var(--text-2);line-height:1.7">이름을 입력하면 참가 종목, 조, 레인, 핸디, 현재 순위를 확인할 수 있습니다.</p></div></div>`;
+    const { list, one } = resolvePlayer(state.q, state.searchId);
+    if (!one) {
+      html += `<div class="section-label">검색 결과 ${list.length}명</div>`;
+      html += list.length ? `<div class="card-list grid-tbl">${list.slice(0, 30).map(p => `<button class="gr" style="grid-template-columns:1fr auto;width:100%;background:none;border:none;border-bottom:1px solid var(--line-soft);text-align:left;font:inherit;cursor:pointer" data-action="pick-player" data-id="${esc(p.id)}"><span class="b">${esc(p.name)} <span class="dim" style="font-weight:400">· ${esc(regionName(p.regionId))} · ${p.gender === 'F' ? '여' : '남'}</span></span>${ICON.arrow}</button>`).join('')}</div>` : `<div class="card" style="margin:0"><p class="empty">"${esc(state.q)}" 이름의 선수가 없습니다.</p></div>`;
+      return html + '</div>';
     }
-    html += `<div class="card"><h2>지역별 참가 인원</h2><div class="row">${byRegion.map(r => `<span class="chip">${esc(r.name)} <b>${r.n}</b></span>`).join('') || '<p class="empty">등록된 지역이 없습니다.</p>'}</div></div>`;
-    if (!isAdmin()) html += `<p class="muted small center mt">선수 등록·배정·점수 입력은 우측 상단 <b>관리자</b> 버튼으로 로그인 후 가능합니다.</p>`;
-    return html;
+    const p = one; const res = results(); const g = groupOf(p.group);
+    const row = res.playerRows.find(r => r.playerId === p.id);
+    const genderRows = p.gender === 'F' ? res.female : res.male; const gr = genderRows.find(r => r.playerId === p.id);
+    const teamOf = ev => d.teams.find(t => t.event === ev && (t.members || []).includes(p.id));
+    const teamRow = (ev, t) => t ? res[ev].find(r => r.teamId === t.id) : null;
+    const evRow = (ev, on, title, sub) => `<div class="ev-row ${on ? '' : 'off'}"><div class="ic">${{ individual: '개인', scotch: '스카', baker: '베이' }[ev]}</div><div><div class="t">${title}</div><div class="d">${sub}</div></div>${on ? ICON.check : ''}</div>`;
+    const sc = teamOf('scotch'), bk = teamOf('baker');
+    const partner = t => (t.members || []).filter(id => id !== p.id).map(id => (playerById(id) || {}).name).filter(Boolean).join(', ');
+    const ind = !p.events || p.events.individual !== false;
+    html += `<div class="section-label">검색 결과</div>
+      <div class="card id-card" style="margin:0"><div class="row between"><div class="name">${esc(p.name)}</div>${p.isRep ? '<span class="badge rep-badge" style="font-size:11.5px;padding:5px 10px">지역 대표</span>' : ''}</div>
+        <div class="meta"><span>${esc(regionName(p.regionId))}</span><span>·</span><span>${p.gender === 'F' ? '여자' : '남자'}</span>${p.birthYear ? `<span>·</span><span>${p.birthYear}년생</span>` : ''}</div></div>
+      <div class="card stack" style="margin:0"><h2 style="margin:0">참가 종목</h2>
+        ${evRow('individual', ind, ind ? `개인전${g ? ' · ' + esc(g.name) : ''}` : '개인전', ind ? `${esc(groupDate(g)) || '조 미편성'}${row && row.lane ? ` · ${row.lane}레인 ${row.pos}번` : ''}${g && g.bonus ? ` · 핸디 보너스 +${g.bonus}` : ''}` : '미신청')}
+        ${evRow('scotch', !!sc, sc ? `스카치 더블 · ${esc(partner(sc))} 팀` : '스카치 더블', sc ? (sc.lane ? `${sc.lane}레인` : '레인 미배정') : '미신청')}
+        ${evRow('baker', !!bk, bk ? `베이커 · ${esc(partner(bk))}` : '베이커', bk ? (bk.lane ? `${bk.lane}레인` : '레인 미배정') : '미신청')}
+      </div>
+      <div class="card" style="margin:0"><h2 style="margin-bottom:10px">핸디 정보</h2><div class="tiles"><div class="tile"><div class="v hi">${row ? row.handicap : num(p.handicap)}</div><div class="l">핸디 (게임당)</div></div><div class="tile"><div class="v">${num(p.adjust) || 0}</div><div class="l">총점 가감</div></div></div>
+        <div class="muted" style="font-size:11px;margin-top:9px;color:var(--text-3)">핸디는 규정(여성 15, 시니어 1~5, 최고 20 등)에 따라 관리자가 직접 입력합니다.${g && g.bonus ? ` ${esc(g.name)} 보너스 +${g.bonus} 포함.` : ''}</div></div>`;
+    if (row && row.gamesPlayed > 0) {
+      html += `<div class="card" style="margin:0"><h2 style="margin-bottom:10px">개인전 현재 성적</h2><div class="tiles"><div class="tile"><div class="v">${gr ? gr.rank : '-'}<span style="font-size:13px;font-family:var(--font-body);font-weight:700">위</span></div><div class="l">${p.gender === 'F' ? '여자' : '남자'} ${genderRows.length}명 중</div></div><div class="tile"><div class="v">${row.total}</div><div class="l">총점</div></div><div class="tile"><div class="v">${row.scratch}</div><div class="l">스크래치</div></div></div><p class="muted" style="margin-top:8px">게임: ${row.games.map(x => x == null ? '-' : x).join(' / ')}</p></div>`;
+    }
+    [['scotch', sc], ['baker', bk]].forEach(([ev, t]) => { const tr = teamRow(ev, t); if (tr && tr.gamesPlayed > 0) html += `<div class="card" style="margin:0"><h2 style="margin-bottom:10px">${EV[ev].name} 현재 성적</h2><div class="tiles"><div class="tile"><div class="v">${tr.rank}<span style="font-size:13px;font-family:var(--font-body);font-weight:700">위</span></div><div class="l">${res[ev].length}팀 중</div></div><div class="tile"><div class="v">${tr.total}</div><div class="l">총점</div></div></div><p class="muted" style="margin-top:8px">게임: ${tr.games.map(x => x == null ? '-' : x).join(' / ')}</p></div>`; });
+    return html + '</div>';
+  }
+
+  function renderPublicAssign() {
+    const s = S(); const d = state.data;
+    const subs = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커']]);
+    if (!subs.some(x => x[0] === state.pubAssignSub)) state.pubAssignSub = subs[0][0];
+    const q = state.pubAssignQ.trim();
+    // 이름 검색 시 해당 선수의 조로 자동 전환
+    let hit = null, cands = [];
+    if (q) { const { one, list } = resolvePlayer(q, state.pubAssignId); cands = list; if (one) { hit = one; if (!EV[state.pubAssignSub] && one.group && s.groups.some(g => g.id === one.group) && state.pubAssignSub !== one.group) state.pubAssignSub = one.group; } }
+    let html = `<div class="hero"><div><div class="hero-eyebrow">${esc(s.name)}</div><h1 class="hero-title sm">레인 배정</h1></div>
+      <div class="chips">${subs.map(([k, l]) => `<button class="chip-nav ${state.pubAssignSub === k ? 'active' : ''}" data-action="pub-assign-sub" data-sub="${esc(k)}">${esc(l)}</button>`).join('')}</div>
+      ${searchBox('pub-assign-q', state.pubAssignQ, '이름으로 내 레인 찾기')}</div><div class="page">`;
+    const sub = state.pubAssignSub;
+    if (q && !hit) html += cands.length ? `<div class="section-label">동명이인 · 선택하세요</div><div class="card-list grid-tbl">${cands.slice(0, 20).map(p => `<button class="gr" style="grid-template-columns:1fr auto;width:100%;background:none;border:none;border-bottom:1px solid var(--line-soft);text-align:left;font:inherit;cursor:pointer" data-action="pick-assign" data-id="${esc(p.id)}"><span class="b">${esc(p.name)} <span class="dim" style="font-weight:400">· ${esc(regionName(p.regionId))} · ${esc(groupName(p.group))}</span></span>${ICON.arrow}</button>`).join('')}</div>` : `<div class="card" style="margin:0"><p class="empty">"${esc(q)}" 이름의 선수가 없습니다.</p></div>`;
+    if (EV[sub]) {
+      const pr = Ranking.playerRows(d.players, d.regions, s);
+      const rows = Ranking.teamRows(d.teams, sub, pr, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || a.regionName.localeCompare(b.regionName, 'ko'));
+      const mine = hit ? rows.find(r => r.memberIds.includes(hit.id)) : null;
+      if (hit && !mine) html += `<div class="card" style="margin:0"><p class="empty">${esc(hit.name)} 선수는 ${EV[sub].name}에 등록되어 있지 않습니다.</p></div>`;
+      if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${mine.lane}</span><span class="u">번 레인</span>` : '<span class="u">레인 미배정</span>'}</div><div class="facts"><div><div class="k">팀</div><div class="v">${esc(mine.name)}</div></div><div><div class="k">지역</div><div class="v">${esc(mine.regionName)}</div></div><div><div class="k">팀 핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
+      html += `<div class="card grid-tbl" style="margin:0"><div class="row between" style="margin-bottom:10px"><b style="font-size:13.5px">${EV[sub].name} 팀 명단</b><span class="muted" style="color:var(--text-3)">${rows.length}팀</span></div>
+        <div class="gh" style="grid-template-columns:44px 1fr 44px"><span>레인</span><span>팀 · 지역</span><span class="r">핸디</span></div>
+        ${rows.map(r => `<div class="gr ${mine && r.teamId === mine.teamId ? 'hit' : ''}" style="grid-template-columns:44px 1fr 44px"><span class="b">${r.lane || '-'}</span><span>${esc(r.name)}<div class="dim" style="font-size:11px">${esc(r.regionName)} · ${r.memberNames.map(esc).join(', ')}</div></span><span class="r">${r.handicap}</span></div>`).join('') || '<p class="empty">등록된 팀이 없습니다.</p>'}</div>`;
+      return html + '</div>';
+    }
+    const g = groupOf(sub);
+    const rows = Ranking.playerRows(d.players.filter(p => p.group === sub), d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
+    const mine = hit ? rows.find(r => r.playerId === hit.id) : null;
+    if (hit && !mine) html += `<div class="card" style="margin:0"><p class="empty">${esc(hit.name)} 선수는 ${esc(g.name)}에 편성되어 있지 않습니다${hit.group ? ` (${esc(groupName(hit.group))})` : ' (조 미편성)'}.</p></div>`;
+    if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${mine.lane}</span><span class="u">번 레인</span>` : '<span class="u">레인 미배정</span>'}</div><div class="facts"><div><div class="k">순번</div><div class="v">${mine.pos ? mine.pos + '번' : '-'}</div></div><div><div class="k">조</div><div class="v">${esc(g.name)}</div></div><div><div class="k">시작 시간</div><div class="v">${esc(groupDate(g) || '-')}</div></div><div><div class="k">핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
+    html += `<div class="card grid-tbl" style="margin:0"><div class="row between" style="margin-bottom:10px"><b style="font-size:13.5px">${esc(g.name)} 전체 명단</b><span class="muted" style="color:var(--text-3)">${esc(groupTime(g))}${groupTime(g) ? ' · ' : ''}${rows.length}명</span></div>
+      <div class="gh" style="grid-template-columns:36px 40px 1fr 44px"><span>레인</span><span>순번</span><span>이름 · 지역</span><span class="r">핸디</span></div>
+      ${rows.map(r => `<div class="gr ${mine && r.playerId === mine.playerId ? 'hit' : ''}" style="grid-template-columns:36px 40px 1fr 44px"><span class="b">${r.lane || '-'}</span><span>${r.pos || '-'}</span><span>${esc(r.name)} <span class="dim">· ${esc(r.regionName)}</span></span><span class="r">${r.handicap}</span></div>`).join('') || '<p class="empty">이 조에 편성된 선수가 없습니다.</p>'}</div>`;
+    return html + '</div>';
+  }
+
+  function renderRank() {
+    const s = S(); const d = state.data; const res = results();
+    const tabs = [['individual', '개인전'], ['scotch', '스카치'], ['baker', '베이커'], ['standings', '지역종합']];
+    const t = state.rankTab; const q = state.rankQ.trim();
+    const hitIds = q ? new Set(findPlayers(q).map(p => p.id)) : new Set();
+    let html = `<div class="hero has-tabs"><div class="hero-eyebrow">${s.status === 'final' ? '최종 확정 결과' : (s.basis === 'scratch' ? '스크래치 기준' : '핸디 포함 총점 기준')}</div><h1 class="hero-title sm">${s.status === 'final' ? '최종 순위' : '실시간 순위'}</h1>
+      <div class="hero-tabs">${tabs.map(([k, l]) => `<button class="${t === k ? 'active' : ''}" data-action="rank-tab" data-tab2="${k}">${l}</button>`).join('')}</div></div><div class="page">`;
+    const podiumList = (rows, nameFn, subFn, scoreFn, ptsFn, isHit) => rows.length ? `<div class="podium">${rows.map(r => `<div class="pod ${isHit && isHit(r) ? 'hit' : ''}"><span class="rk rk-${r.rank <= 3 ? r.rank : ''}" style="${r.rank > 3 ? 'background:var(--text-3)' : ''}">${r.rank}</span><div class="body"><div class="n">${nameFn(r)}</div><div class="c">${subFn(r)}</div></div><div><div class="s">${scoreFn(r)}</div>${ptsFn ? `<div class="p">${ptsFn(r)}</div>` : ''}</div></div>`).join('')}</div>` : '';
+    const restList = (rows, nameFn, scoreFn, isHit) => rows.length ? `<div class="card-list grid-tbl rank-list">${rows.map(r => `<div class="gr ${isHit && isHit(r) ? 'hit' : ''}"><span class="no">${r.rank}</span><span>${nameFn(r)}</span><span class="sc">${scoreFn(r)}</span></div>`).join('')}</div>` : '';
+    if (t === 'individual') {
+      const gpts = state.rankGender === 'F' ? s.points.individualF : s.points.individualM;
+      let rows = state.rankGender === 'M' ? res.male : state.rankGender === 'F' ? res.female : Ranking.individualRanking(res.playerRows);
+      if (state.rankGroup) rows = Ranking.individualRanking(res.playerRows, r => (state.rankGender === 'all' || r.gender === state.rankGender) && r.group === state.rankGroup);
+      rows = rows.filter(r => r.gamesPlayed > 0);
+      const isHit = r => hitIds.has(r.playerId);
+      html += `<div class="chips">${[['M', '남자'], ['F', '여자'], ['all', '전체']].map(([k, l]) => `<button class="subtab ${state.rankGender === k ? 'active' : ''}" data-action="rank-gender" data-g="${k}" style="margin:0">${l}</button>`).join('')}<select class="subtab" data-change="rank-group" style="margin:0;width:auto;min-width:88px;padding-right:26px"><option value="">전체 조</option>${s.groups.map(g => `<option value="${esc(g.id)}" ${state.rankGroup === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>
+        ${searchBox('rank-q', state.rankQ, '이름 검색으로 내 순위 찾기', true)}`;
+      if (!rows.length) html += '<div class="card" style="margin:0"><p class="empty">아직 입력된 점수가 없습니다.</p></div>';
+      else {
+        const showPts = state.rankGender !== 'all' && !state.rankGroup;
+        html += podiumList(rows.slice(0, 3), r => `${esc(r.name)}${r.isRep ? ' <span class="badge rep-badge">대표</span>' : ''}`, r => `${esc(r.regionName)} · ${esc(groupName(r.group))}${r.gamesPlayed < s.games.individual ? ` · ${r.gamesPlayed}G` : ''}`, r => r.score, showPts ? (r => `포인트 ${Ranking.pointsForRank(r.rank, gpts) || '-'}`) : null, isHit);
+        html += restList(rows.slice(3), r => `${esc(r.name)} <span class="dim">· ${esc(r.regionName)}</span>${r.gamesPlayed < s.games.individual ? ` <span class="dim">${r.gamesPlayed}G</span>` : ''}`, r => r.score, isHit);
+      }
+    } else if (t === 'scotch' || t === 'baker') {
+      const rows = res[t].filter(r => r.gamesPlayed > 0); const pts = s.points[t];
+      const isHit = r => r.memberIds.some(id => hitIds.has(id));
+      html += searchBox('rank-q', state.rankQ, '이름 검색으로 내 팀 찾기', true);
+      if (!rows.length) html += `<div class="card" style="margin:0"><p class="empty">아직 입력된 ${EV[t].name} 점수가 없습니다.</p></div>`;
+      else {
+        html += podiumList(rows.slice(0, 3), r => esc(r.regionName), r => r.memberNames.map(esc).join(' · '), r => r.total, r => `포인트 ${Ranking.pointsForRank(r.rank, pts) || '-'}`, isHit);
+        html += restList(rows.slice(3), r => `${esc(r.regionName)} <span class="dim">· ${r.memberNames.map(esc).join(', ')}</span>`, r => r.total, isHit);
+      }
+    } else {
+      const rows = res.standings; const br = r => `개인 남 ${r.male} · 여 ${r.female} · 3인조 ${r.reps} · 스카치 ${r.scotch} · 베이커 ${r.baker}`;
+      html += `<p class="muted" style="color:var(--text-3)">배점: 개인전 남 ${s.points.individualM.join('/')} · 여 ${s.points.individualF.join('/')} · 3인조·스카치·베이커 ${s.points.reps.join('/')}</p>`;
+      if (!rows.some(r => r.total > 0)) html += '<div class="card" style="margin:0"><p class="empty">아직 포인트가 없습니다.</p></div>';
+      else {
+        html += podiumList(rows.slice(0, 3), r => esc(r.regionName), br, r => r.total + '점', null);
+        html += restList(rows.slice(3), r => `${esc(r.regionName)}<div class="dim" style="font-size:11px">${br(r)}</div>`, r => r.total + '점');
+      }
+      const reps = res.reps;
+      html += `<div class="card grid-tbl" style="margin:0"><div class="row between" style="margin-bottom:10px"><b style="font-size:13.5px">3인조 (지역 대표 합계)</b><span class="muted" style="color:var(--text-3)">지역당 ${s.repCount}명</span></div>
+        <div class="gh" style="grid-template-columns:30px 1fr 56px"><span>순위</span><span>지역 · 대표</span><span class="r">합계</span></div>
+        ${reps.map(r => `<div class="gr" style="grid-template-columns:30px 1fr 56px"><span class="b">${r.rank}</span><span>${esc(r.regionName)}${r.short ? ' <span class="badge live">대표 부족</span>' : ''}<div class="dim" style="font-size:11px">${r.reps.map(x => esc(x.name) + '(' + x.score + ')').join(', ') || '-'}</div></span><span class="r b">${r.score}</span></div>`).join('')}</div>`;
+    }
+    return html + '</div>';
+  }
+
+  // ===== 관리자 대시보드 =====
+  function renderAdminHome() {
+    const s = S(); const d = state.data; const pr = Ranking.progress(d);
+    const pct = pr.individual.total ? Math.round(pr.individual.done / pr.individual.total * 100) : 0;
+    const allDone = pr.individual.done === pr.individual.total && pr.scotch.done === pr.scotch.total && pr.baker.done === pr.baker.total;
+    return `<div class="stat-grid" style="margin-bottom:20px">
+      ${stat(`${d.players.length}<small>명</small>`, '참가 선수', `${d.regions.length}개 지역 참가`)}
+      ${stat(`${s.lanes || 0}<small>레인</small>`, '등록 레인', `레인당 ${s.perLane || 4}명 배정 · ${d.players.filter(p => p.lane).length}명 배정됨`)}
+      ${stat(`${pct}<small>%</small>`, '개인전 진행률', `${pr.individual.done}/${pr.individual.total}명 입력`, true)}
+      ${stat(`${s.status === 'final' ? 1 : 0}<small>건</small>`, '확정된 결과', s.status === 'final' ? '최종 확정됨' : '최종 확정 전')}
+    </div>
+    <div class="card"><h2>결과 관리 ${statusBadge()}</h2>
+      <div class="muted" style="margin-bottom:14px">개인전 ${pr.individual.done}/${pr.individual.total}명 · 스카치 ${pr.scotch.done}/${pr.scotch.total}팀 · 베이커 ${pr.baker.done}/${pr.baker.total}팀${allDone ? '' : ' · <span class="badge live">미입력 있음</span>'}</div>
+      <div class="row">${s.status === 'final' ? '<button class="btn btn-outline" data-action="unfinalize">확정 해제</button>' : `${s.status !== 'live' ? '<button class="btn btn-secondary" data-action="set-status" data-status="live">대회 시작 (진행중)</button>' : ''}<button class="btn btn-success" data-action="finalize">최종 결과 확정</button>`}</div>
+      <p class="muted" style="margin-top:12px;color:var(--text-3);font-size:11.5px">확정하면 순위와 포인트가 스냅샷으로 저장되어 이후 입력이 바뀌어도 결과가 유지됩니다.</p></div>
+    <div class="quick-grid">
+      <button class="quick" data-action="tab" data-tab="players"><div class="ic">${ICON.user}</div><div><div class="t">선수 등록하기</div><div class="d">참가 신청 · 핸디 입력</div></div></button>
+      <button class="quick" data-action="tab" data-tab="assign"><div class="ic">${ICON.lanes}</div><div><div class="t">레인 배정하기</div><div class="d">조 편성 · 자동 배정</div></div></button>
+      <button class="quick" data-action="go-score"><div class="ic">${ICON.rank}</div><div><div class="t">점수 입력하기</div><div class="d">게임 점수 · 실시간 집계</div></div></button>
+    </div>`;
   }
   function podium(rows, nameFn, scoreFn, subFn) {
     if (!rows.length) return '<p class="empty">아직 결과가 없습니다.</p>';
-    const order = [rows[1], rows[0], rows[2]].filter(Boolean);
-    const cls = r => r.rank === 1 ? 'first' : r.rank === 2 ? 'second' : 'third';
-    return `<div class="podium">${order.map(r => `<div class="p ${cls(r)}"><div>${medal(r.rank)}</div><div class="n">${esc(nameFn(r))}</div><div class="c">${esc(subFn ? subFn(r) : '')}</div><div class="s">${esc(scoreFn(r))}</div></div>`).join('')}</div>`;
+    return `<div class="podium">${rows.map(r => `<div class="pod"><span class="rk rk-${r.rank}">${r.rank}</span><div class="body"><div class="n">${esc(nameFn(r))}</div><div class="c">${esc(subFn ? subFn(r) : '')}</div></div><div class="s">${esc(scoreFn(r))}</div></div>`).join('')}</div>`;
   }
 
   // ----- 선수 -----
@@ -337,16 +524,17 @@
   }
 
   function renderIndividualScore() {
-    const s = S(); const d = state.data; const n = s.games.individual;
+    const s = S(); const d = state.data; const n = s.games.individual; const res = results();
     const gid = state.scoreGroup || s.groups[0].id;
     const list = d.players.filter(p => p.group === gid);
     const rows = Ranking.playerRows(list, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
     const done = rows.filter(r => r.gamesPlayed === n).length;
-    return renderScoreImport('individual', gid) + `<div class="card"><h2>개인전 점수 입력 <select data-change="score-group" style="width:auto">${groupOptions(gid)}</select></h2>
-      <p class="muted small mb">입력하면 자동 저장됩니다 · 완료 ${done}/${rows.length}명 <span class="save-state" id="save-state"></span></p>
+    const mini = (title, list2, pts) => `<div class="card"><h2>실시간 집계 · ${title}</h2><div class="table-scroll"><table class="tbl"><thead><tr><th>순위</th><th class="left">이름</th><th class="left">지역</th><th>조</th><th>총점</th><th>포인트</th></tr></thead><tbody>
+      ${list2.slice(0, 5).map(r => `<tr class="rank-${r.rank}"><td>${medal(r.rank)}</td><td class="left"><b>${esc(r.name)}</b></td><td class="left">${esc(r.regionName)}</td><td>${esc(groupName(r.group))}</td><td class="strong">${r.score}</td><td>${Ranking.pointsForRank(r.rank, pts) || ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">아직 점수가 없습니다.</td></tr>'}</tbody></table></div></div>`;
+    return `<div class="card"><h2><span class="row">${esc(groupName(gid))} 점수 입력 <span class="save-state saved" id="save-state">자동 저장</span></span><span class="row"><span class="muted" style="color:var(--text-3)">완료 ${done}/${rows.length}명</span><select data-change="score-group" style="width:auto">${groupOptions(gid)}</select></span></h2>
       <div class="table-scroll"><table class="tbl"><thead><tr><th>레인</th><th class="left">이름</th><th class="left">지역</th><th>핸디</th>${gameHeads(n)}<th>합계</th><th>총점</th></tr></thead><tbody>
-      ${rows.map(r => `<tr data-row="${esc(r.playerId)}"><td>${r.lane ? r.lane + '-' + r.pos : '-'}</td><td class="left"><b>${esc(r.name)}</b>${r.gender === 'F' ? ' <span class="badge gender-F">여</span>': ''}</td><td class="left small">${esc(r.regionName)}</td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-pscore="${esc(r.playerId)}" data-g="${i}" value="${g == null ? '' : g}"></td>`).join('')}<td class="c-scratch">${r.scratch}</td><td class="c-total strong">${r.total}</td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">이 조에 선수가 없습니다. 배정 탭에서 조를 편성하세요.</td></tr>`}
-      </tbody></table></div></div>`;
+      ${rows.map(r => `<tr data-row="${esc(r.playerId)}"><td><b>${r.lane ? r.lane + '-' + r.pos : '-'}</b></td><td class="left"><b>${esc(r.name)}</b>${r.gender === 'F' ? ' <span class="badge gender-F">여</span>' : ''}</td><td class="left small">${esc(r.regionName)}</td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-pscore="${esc(r.playerId)}" data-g="${i}" value="${g == null ? '' : g}" aria-label="${esc(r.name)} ${i + 1}게임"></td>`).join('')}<td class="c-scratch"><span>${r.scratch}</span></td><td class="c-total strong"><span>${r.total}</span></td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">이 조에 선수가 없습니다. 배정 탭에서 조를 편성하세요.</td></tr>`}
+      </tbody></table></div></div>` + mini('개인전 남자', res.male.filter(r => r.gamesPlayed), s.points.individualM) + mini('개인전 여자', res.female.filter(r => r.gamesPlayed), s.points.individualF) + renderScoreImport('individual', gid);
   }
 
   // ----- 팀 종목 -----
@@ -360,10 +548,10 @@
     if (cur === 'score') {
       const rows = Ranking.teamRows(d.teams, event, res.playerRows, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || a.regionName.localeCompare(b.regionName, 'ko'));
       const done = rows.filter(r => r.gamesPlayed === n).length;
-      return html + renderScoreImport(event) + `<div class="card"><h2>${ev.name} 점수 입력</h2><p class="muted small mb">팀 핸디는 배정 탭에서 팀별로 입력 · 완료 ${done}/${rows.length}팀 <span class="save-state" id="save-state"></span></p>
+      return html + `<div class="card"><h2>${ev.name} 점수 입력</h2><p class="muted small mb">팀 핸디는 배정 탭에서 팀별로 입력 · 완료 ${done}/${rows.length}팀 <span class="save-state" id="save-state"></span></p>
         <div class="table-scroll"><table class="tbl"><thead><tr><th>레인</th><th class="left">지역</th><th class="left">팀</th><th>핸디</th>${gameHeads(n)}<th>합계</th><th>총점</th></tr></thead><tbody>
-        ${rows.map(r => `<tr data-row="${esc(r.teamId)}"><td>${r.lane || '-'}</td><td class="left">${esc(r.regionName)}</td><td class="left"><b>${esc(r.name)}</b></td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-tscore="${esc(r.teamId)}" data-g="${i}" value="${g == null ? '' : g}"></td>`).join('')}<td class="c-scratch">${r.scratch}</td><td class="c-total strong">${r.total}</td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">팀이 없습니다. 배정 탭에서 팀을 만드세요.</td></tr>`}
-        </tbody></table></div></div>`;
+        ${rows.map(r => `<tr data-row="${esc(r.teamId)}"><td>${r.lane || '-'}</td><td class="left">${esc(r.regionName)}</td><td class="left"><b>${esc(r.name)}</b></td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-tscore="${esc(r.teamId)}" data-g="${i}" value="${g == null ? '' : g}"></td>`).join('')}<td class="c-scratch"><span>${r.scratch}</span></td><td class="c-total strong"><span>${r.total}</span></td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">팀이 없습니다. 배정 탭에서 팀을 만드세요.</td></tr>`}
+        </tbody></table></div></div>` + renderScoreImport(event);
     }
     html += `<p class="muted small mb">${s.status === 'final' ? '<span class="status-final">확정된 결과</span>': '실시간 집계'} · ${ev.name} ${n}게임 · 동점: 스크래치 → 하이 → 로우${pts ? ` · 상위 ${pts.length}팀 지역 포인트 (${pts.join('/')})` : ''}</p>`;
     html += `<div class="card"><h2>${ev.name} 순위 <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-table" data-name="${ev.name}">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
@@ -517,7 +705,8 @@
     if (kind === 'player') row = Ranking.playerRows([playerById(id)], state.data.regions, s)[0];
     else { const pr = Ranking.playerRows(state.data.players, state.data.regions, s); const t = teamById(id); row = Ranking.teamRows([t], t.event, pr, state.data.regions, s)[0]; }
     const tr = $(`tr[data-row="${CSS.escape(id)}"]`); if (!tr || !row) return;
-    tr.querySelector('.c-scratch').textContent = row.scratch; tr.querySelector('.c-total').textContent = row.total;
+    const sc = tr.querySelector('.c-scratch span') || tr.querySelector('.c-scratch'); const tt = tr.querySelector('.c-total span') || tr.querySelector('.c-total');
+    sc.textContent = row.scratch; tt.textContent = row.total;
   }
 
   // ===== 이벤트 =====
@@ -526,7 +715,16 @@
     if (!el || e.target.closest('input,select,textarea,a,label')) return;
     const a = el.dataset.action, id = el.dataset.id; const d = state.data; const s = S();
     switch (a) {
-      case 'tab': state.tab = el.dataset.tab; return render();
+      case 'tab': await flush(); state.tab = el.dataset.tab; render(); return window.scrollTo(0, 0);
+      case 'open-admin': return openAdminModal();
+      case 'toggle-rules': state.rulesOpen = !state.rulesOpen; return render();
+      case 'back-admin': state.previewPublic = false; state.tab = 'home'; applyRole(); return render();
+      case 'go-score': state.tab = 'individual'; state.indSub = 'score'; render(); return window.scrollTo(0, 0);
+      case 'pick-player': { const p = playerById(id); if (p) { state.searchId = p.id; state.q = p.name; } return render(); }
+      case 'pub-assign-sub': state.pubAssignSub = el.dataset.sub; return render();
+      case 'pick-assign': { const p = playerById(id); if (p) { state.pubAssignId = p.id; state.pubAssignQ = p.name; } return render(); }
+      case 'rank-tab': state.rankTab = el.dataset.tab2; return render();
+      case 'rank-gender': state.rankGender = el.dataset.g; return render();
       case 'assign-sub': await flush(); state.assignSub = el.dataset.sub; return render();
       case 'ind-sub': await flush(); state.indSub = el.dataset.sub; return render();
       case 'team-sub': await flush(); state.teamSub[state.tab] = el.dataset.sub; return render();
@@ -660,6 +858,7 @@
 
   function onChange(e) {
     const el = e.target; const k = el.dataset.change; const d = state.data; const s = S();
+    if (k === 'rank-group') { state.rankGroup = el.value; return render(); }
     if (k === 'players-region') { state.playersRegion = el.value; return render(); }
     if (k === 'players-gender') { state.playersGender = el.value; return render(); }
     if (k === 'team-region') { state.teamRegion = el.value; return render(); }
@@ -698,8 +897,15 @@
       updateRow('team', t.id); return markDirty('team', t.id);
     }
   }
+  function debouncedRender(attr) {
+    clearTimeout(state.qTimer);
+    state.qTimer = setTimeout(() => { render(); const i = $(`[data-input="${attr}"]`); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250);
+  }
   function onInput(e) {
     const el = e.target;
+    if (el.dataset.input === 'pub-q') { state.q = el.value; state.searchId = ''; return debouncedRender('pub-q'); }
+    if (el.dataset.input === 'pub-assign-q') { state.pubAssignQ = el.value; state.pubAssignId = ''; return debouncedRender('pub-assign-q'); }
+    if (el.dataset.input === 'rank-q') { state.rankQ = el.value; return debouncedRender('rank-q'); }
     if (el.dataset.input === 'players-q') { state.playersQ = el.value; clearTimeout(state.qTimer); state.qTimer = setTimeout(() => { render(); const i = $('[data-input="players-q"]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); }
   }
 
