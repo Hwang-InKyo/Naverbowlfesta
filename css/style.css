@@ -228,3 +228,4 @@ header h1, header .subtitle { color: white; }
 header .subtitle { opacity: 0.92; }
 .mode-badge { background: rgba(0,0,0,0.18); }
 .mode-badge.remote { background: rgba(0,0,0,0.28); }
+.ev.side { background: #6b6f76; }

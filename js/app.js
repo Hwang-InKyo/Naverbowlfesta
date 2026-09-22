@@ -10,7 +10,7 @@
     data: null, tab: 'home',
     playersRegion: '', playersGender: '', playersQ: '', editPlayer: null, editRegion: null,
     assignSub: 'A', indSub: 'M', teamSub: { scotch: 'rank', baker: 'rank' }, scoreGroup: '',
-    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: ''
+    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: []
   };
 
   // ===== 유틸 =====
@@ -28,7 +28,7 @@
   const regionOptions = (sel, blank) => (blank ? `<option value="">${esc(blank)}</option>` : '') + (state.data.regions || []).map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
   const groupOptions = (sel, blank) => (blank ? `<option value="">${esc(blank)}</option>` : '') + S().groups.map(g => `<option value="${esc(g.id)}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
   const stat = (v, l) => `<div class="stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`;
-  const evChips = ev => ['individual', 'scotch', 'baker'].filter(k => ev && ev[k]).map(k => `<span class="ev ${k}">${{ individual: '개인', scotch: '스카치', baker: '베이커' }[k]}</span>`).join('');
+  const evChips = ev => ['individual', 'scotch', 'baker', 'side'].filter(k => ev && ev[k]).map(k => `<span class="ev ${k}">${{ individual: '개인', scotch: '스카치', baker: '베이커', side: '사이드' }[k]}</span>`).join('');
   const gamesOf = (r, n) => r.games.slice(0, n).map(g => `<td>${g == null ? '-' : g}</td>`).join('');
   const gameHeads = n => Array.from({ length: n }, (_, i) => `<th>G${i + 1}</th>`).join('');
   const results = () => Ranking.resultsOf(state.data);
@@ -158,10 +158,12 @@
           <label class="checkbox-item"><input type="checkbox" name="ev_individual" ${ev.individual !== false ? 'checked' : ''}> 개인전</label>
           <label class="checkbox-item"><input type="checkbox" name="ev_scotch" ${ev.scotch ? 'checked' : ''}> 스카치</label>
           <label class="checkbox-item"><input type="checkbox" name="ev_baker" ${ev.baker ? 'checked' : ''}> 베이커</label>
+          <label class="checkbox-item"><input type="checkbox" name="ev_side" ${ev.side ? 'checked' : ''}> 사이드</label>
           <label class="checkbox-item"><input type="checkbox" name="isRep" ${ep && ep.isRep ? 'checked' : ''}> <b>지역 대표</b></label></div></div>
         <div class="form-group"><label>비고</label><input type="text" name="note" value="${esc(ep ? ep.note : '')}"></div>
         <div class="row"><button class="btn btn-small btn-primary" type="submit">저장</button>${ep ? '<button class="btn btn-small btn-outline" type="button" data-action="cancel-player">취소</button>': ''}</div></form></div>`;
-      html += `<div class="card"><h2>신청서 일괄 등록</h2><p class="muted small mb">한 줄에 한 명: <code>이름,지역,성별(남/여),생년,핸디,종목,대표</code><br>종목은 "개인 스카치 베이커" 중 출전하는 것을 띄어쓰기로 (비우면 개인전만). 대표는 "대표" 또는 O.<br>지역이 없으면 자동 생성됩니다. 엑셀 신청서 양식이 정해지면 파일 업로드로 바꿀 예정입니다.</p>
+      html += renderUploadCard();
+      html += `<div class="card"><h2>텍스트로 일괄 등록</h2><p class="muted small mb">한 줄에 한 명: <code>이름,지역,성별(남/여),생년,핸디,종목,대표</code><br>종목은 "개인 스카치 베이커" 중 출전하는 것을 띄어쓰기로 (비우면 개인전만). 대표는 "대표" 또는 O.<br>지역이 없으면 자동 생성됩니다. 엑셀 신청서 양식이 정해지면 파일 업로드로 바꿀 예정입니다.</p>
         <form data-form="import-players"><textarea name="csv" placeholder="홍길동,서울,남,1975,0,개인 스카치,대표&#10;김영희,서울,여,1980,15,개인 베이커"></textarea>
         <div class="row mt"><label class="checkbox-item"><input type="checkbox" name="replace"> 기존 선수·팀 전체 삭제 후 등록</label><button class="btn btn-small btn-primary" type="submit">가져오기</button></div></form></div>`;
     }
@@ -176,6 +178,84 @@
       ${rows.map(r => { const p = pMap.get(r.playerId); return `<tr><td class="left"><b>${esc(r.name)}</b>${r.isRep ? ' <span class="badge rep-badge">대표</span>': ''}</td><td class="left">${esc(r.regionName)}</td><td>${genderBadge(r.gender)}</td><td>${r.birthYear || '-'}</td><td>${r.handicap}${r.bonus ? `<small class="muted"> (${r.baseHandicap}+${r.bonus})</small>` : ''}</td><td>${r.adjust ? r.adjust : '-'}</td><td>${esc(groupName(r.group))}</td><td>${r.lane ? r.lane + '-' + r.pos : '-'}</td><td class="left">${evChips(p.events)}</td>${isAdmin() ? `<td class="nowrap"><button class="btn btn-xs btn-outline" data-action="edit-player" data-id="${esc(p.id)}">수정</button> <button class="btn btn-xs btn-danger" data-action="del-player" data-id="${esc(p.id)}">삭제</button></td>` : ''}</tr>`; }).join('') || '<tr><td colspan="10" class="empty">선수가 없습니다.</td></tr>'}
       </tbody></table></div></div>`;
     return html;
+  }
+
+  // ----- 신청서 엑셀 업로드 -----
+  function renderUploadCard() {
+    const s = S();
+    const ups = state.uploads;
+    let html = `<div class="card"><h2>참가 신청서 업로드 (엑셀)</h2>
+      <p class="muted small mb">클럽별 참가 신청서(.xlsx)를 선택하면 클럽명, 개인전 선수(조·성별·핸디·사이드), 3인조 대표, 스카치·베이커 팀을 읽어 미리보기를 보여줍니다. 여러 파일을 한 번에 선택할 수 있습니다.</p>
+      <label class="btn btn-small btn-primary" style="cursor:pointer">파일 선택 <input type="file" accept=".xlsx,.xls" multiple data-change="signup-files" style="display:none"></label>`;
+    if (typeof XLSX === 'undefined') html += `<p class="form-error mt">엑셀 읽기 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.</p>`;
+    ups.forEach((u, i) => {
+      const p = u.parsed;
+      if (!p) { html += `<div class="lane-box mt"><b>${esc(u.fileName)}</b><p class="form-error">${esc(u.error || '읽기 실패')}</p></div>`; return; }
+      const existing = state.data.regions.find(r => r.name === (u.regionName || p.clubName));
+      const groups = {}; p.players.forEach(x => { groups[x.group] = (groups[x.group] || 0) + 1; });
+      const unknownGroups = Object.keys(groups).filter(g => !s.groups.some(x => x.name === g));
+      html += `<div class="lane-box mt"><div class="row between"><b>${esc(u.fileName)}</b>${u.done ? '<span class="badge final">등록 완료</span>' : ''}</div>
+        <div class="form-row mt"><div class="form-group"><label>클럽(지역) 이름</label><input type="text" data-upload-region="${i}" value="${esc(u.regionName || p.clubName)}"></div><div class="form-group" style="align-self:flex-end"><span class="small">${existing ? `기존 지역 <b>${esc(existing.name)}</b>에 등록 (현재 ${state.data.players.filter(x => x.regionId === existing.id).length}명)` : '새 지역으로 추가'}</span></div></div>
+        <p class="small">개인전 <b>${p.players.length}</b>명 (${Object.entries(groups).map(([g, n]) => esc(g) + ' ' + n + '명').join(', ') || '-'}) · 여성 ${p.players.filter(x => x.gender === 'F').length}명 · 사이드 ${p.players.filter(x => x.side).length}명 · 3인조 ${p.reps.length}명 · 스카치 ${p.scotch.length}팀 · 베이커 ${p.baker.length}팀</p>
+        <p class="small muted">${p.players.map(x => esc(x.name) + (x.handicap ? '(' + x.handicap + ')' : '')).join(', ')}</p>
+        ${unknownGroups.length ? `<p class="form-error">신청서의 조 이름 ${unknownGroups.map(esc).join(', ')} 이(가) 설정의 조(${s.groups.map(g => esc(g.name)).join(', ')})와 다릅니다. 순서대로 대응시켜 등록합니다.</p>` : ''}
+        ${p.warnings.length ? `<div class="form-error small" style="text-align:left">${p.warnings.map(esc).join('<br>')}</div>` : ''}
+        ${u.done ? '' : `<div class="row mt"><label class="checkbox-item"><input type="checkbox" data-upload-replace="${i}" ${u.replace !== false ? 'checked' : ''}> 이 클럽의 기존 선수·팀을 신청서 기준으로 교체</label><button class="btn btn-small btn-primary" data-action="signup-register" data-i="${i}">등록</button></div>`}
+      </div>`;
+    });
+    if (ups.length) html += `<div class="row mt">${ups.some(u => u.parsed && !u.done) ? '<button class="btn btn-small btn-secondary" data-action="signup-register-all">전체 등록</button>' : ''}<button class="btn btn-small btn-outline" data-action="signup-clear">목록 지우기</button></div>`;
+    return html + '</div>';
+  }
+
+  async function readSignupFiles(files) {
+    if (typeof XLSX === 'undefined') return toast('엑셀 읽기 라이브러리를 불러오지 못했습니다.', true);
+    for (const file of files) {
+      const u = { fileName: file.name, parsed: null, error: '', regionName: '', replace: true, done: false };
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+        u.parsed = Signup.parse(rows); u.regionName = u.parsed.clubName;
+        if (!u.parsed.players.length) { u.error = '선수를 찾지 못했습니다. 양식을 확인하세요.'; u.parsed = null; }
+      } catch (e) { u.error = '읽기 실패: ' + e.message; }
+      state.uploads.push(u);
+    }
+    render();
+  }
+
+  /** 신청서 1건 등록 */
+  async function registerSignup(i) {
+    const u = state.uploads[i]; if (!u || !u.parsed || u.done) return;
+    const d = state.data; const s = S(); const p = u.parsed;
+    const regionName = (u.regionName || p.clubName || '').trim();
+    if (!regionName) return toast('클럽(지역) 이름을 입력하세요.', true);
+    let region = d.regions.find(r => r.name === regionName);
+    if (!region) { region = { id: Store.uid('r'), name: regionName, leader: '', note: '' }; d.regions = await Store.saveRegion(region); region = d.regions.find(r => r.name === regionName) || region; }
+    // 조 이름 매핑: 이름 일치 → 없으면 순서
+    const formGroups = [...new Set(p.players.map(x => x.group))];
+    const groupId = g => { const byName = s.groups.find(x => x.name === g); if (byName) return byName.id; const idx = formGroups.indexOf(g); return s.groups[idx] ? s.groups[idx].id : ''; };
+    const repSet = new Set(p.reps);
+    const inScotch = new Set(p.scotch.flat().map(m => m.name)), inBaker = new Set(p.baker.flat().map(m => m.name));
+    const existing = d.players.filter(x => x.regionId === region.id);
+    const list = p.players.map(x => {
+      const ex = existing.find(e => e.name === x.name);
+      const note = x.seniorHandicap ? `시니어핸디 ${x.seniorHandicap}` : '';
+      return { ...(ex || { id: '', birthYear: '', adjust: 0, lane: '', pos: '', games: Array(s.games.individual).fill(null) }), name: x.name, regionId: region.id, gender: x.gender, handicap: x.handicap, group: groupId(x.group), isRep: repSet.has(x.name),
+        events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side }, note: ex && ex.note && !/시니어핸디/.test(ex.note) ? ex.note + (note ? ' ' + note : '') : note };
+    });
+    d.players = await Store.savePlayers(list);
+    if (u.replace !== false) {
+      const keep = new Set(list.map(x => x.name));
+      const gone = d.players.filter(x => x.regionId === region.id && !keep.has(x.name)).map(x => x.id);
+      if (gone.length) { const r = await Store.deletePlayers(gone); d.players = r.players; d.teams = r.teams; }
+    }
+    const idOf = name => { const m = d.players.find(x => x.regionId === region.id && x.name === name); return m ? m.id : null; };
+    const mk = (ev, teams) => teams.map(t => ({ event: ev, regionId: region.id, name: '', members: t.map(m => idOf(m.name)).filter(Boolean), lane: '', handicap: ev === 'baker' ? (t.filter(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F').length >= 2 ? 5 : t.some(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F') ? 3 : 0) : 0, adjust: 0, games: Array(s.games[ev]).fill(null) }));
+    if (u.replace !== false || p.scotch.length) d.teams = await Store.replaceTeams(region.id, 'scotch', mk('scotch', p.scotch));
+    if (u.replace !== false || p.baker.length) d.teams = await Store.replaceTeams(region.id, 'baker', mk('baker', p.baker));
+    u.done = true;
+    return `${regionName}: 선수 ${list.length}명, 스카치 ${p.scotch.length}팀, 베이커 ${p.baker.length}팀 등록`;
   }
 
   // ----- 배정 -----
@@ -386,6 +466,9 @@
       case 'toggle-region': state.openRegion = state.openRegion === id ? '' : id; return render();
       case 'csv': return tableCsv(el.dataset.sel, el.dataset.name);
       case 'print': return window.print();
+      case 'signup-register': { const msg = await run(() => registerSignup(num(el.dataset.i))); if (msg) toast(msg); return render(); }
+      case 'signup-register-all': { const msgs = []; await run(async () => { for (let i = 0; i < state.uploads.length; i++) { const m = await registerSignup(i); if (m) msgs.push(m); } }); toast(msgs.length + '개 클럽 등록 완료'); return render(); }
+      case 'signup-clear': state.uploads = []; return render();
       case 'edit-region': state.editRegion = { ...regionById(id) }; return render();
       case 'cancel-region': state.editRegion = null; return render();
       case 'del-region': if (!confirm(`"${regionName(id)}" 지역을 삭제할까요?`)) return; await run(async () => { d.regions = await Store.deleteRegion(id); }, '삭제되었습니다.'); return render();
@@ -452,7 +535,7 @@
       case 'save-player': {
         if (!v('regionId')) return toast('지역을 선택하세요.', true);
         const ex = f.dataset.id ? playerById(f.dataset.id) : null;
-        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), } };
+        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), side: chk('ev_side') } };
         if (d.players.some(x => x.id !== p.id && x.regionId === p.regionId && x.name === p.name)) return toast('같은 지역에 동명 선수가 있습니다.', true);
         const r = await run(async () => { d.players = await Store.savePlayers([p]); return true; }, '저장되었습니다.'); if (r) { state.editPlayer = null; render(); } return;
       }
@@ -510,6 +593,9 @@
     if (k === 'players-gender') { state.playersGender = el.value; return render(); }
     if (k === 'team-region') { state.teamRegion = el.value; return render(); }
     if (k === 'score-group') { flush(); state.scoreGroup = el.value; return render(); }
+    if (k === 'signup-files') { const files = [...el.files]; el.value = ''; return readSignupFiles(files); }
+    if (el.dataset.uploadRegion != null) { const u = state.uploads[num(el.dataset.uploadRegion)]; if (u) u.regionName = el.value.trim(); return render(); }
+    if (el.dataset.uploadReplace != null) { const u = state.uploads[num(el.dataset.uploadReplace)]; if (u) u.replace = el.checked; return; }
     if (k === 'import-json') {
       const file = el.files[0]; if (!file) return;
       const reader = new FileReader();

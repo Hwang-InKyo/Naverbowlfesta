@@ -57,6 +57,8 @@ function doPost(e) {
       case 'deleteRegion': return resp({ regions: deleteRegion(ss, body.id) });
       case 'savePlayers': return resp({ players: savePlayers(ss, body.players) });
       case 'deletePlayer': return resp(deletePlayer(ss, body.id));
+      case 'deletePlayers': return resp(deletePlayers(ss, body.ids || []));
+      case 'replaceTeams': return resp({ teams: replaceTeams(ss, body.regionId, body.event, body.teams || []) });
       case 'replacePlayers': return resp(replacePlayers(ss, body.players));
       case 'saveTeams': return resp({ teams: saveTeams(ss, body.teams) });
       case 'deleteTeam': return resp({ teams: deleteTeam(ss, body.id) });
@@ -163,6 +165,20 @@ function deletePlayer(ss, id) {
   const teams = getTeams(ss);
   teams.filter(t => (t.members || []).indexOf(id) >= 0).forEach(t => { t.members = t.members.filter(m => m !== id); upsertRow(sheetOf(ss, 'teams'), t.id, teamRow(t)); });
   return { players: getPlayers(ss), teams: getTeams(ss) };
+}
+function deletePlayers(ss, ids) {
+  const sheet = sheetOf(ss, 'players');
+  ids.forEach(id => deleteRowById(sheet, id));
+  const set = {}; ids.forEach(id => { set[id] = true; });
+  getTeams(ss).forEach(t => { if ((t.members || []).some(m => set[m])) { t.members = t.members.filter(m => !set[m]); upsertRow(sheetOf(ss, 'teams'), t.id, teamRow(t)); } });
+  return { players: getPlayers(ss), teams: getTeams(ss) };
+}
+function replaceTeams(ss, regionId, event, list) {
+  const sheet = sheetOf(ss, 'teams');
+  getTeams(ss).filter(t => t.regionId === regionId && t.event === event).forEach(t => deleteRowById(sheet, t.id));
+  const rows = list.map(t => teamRow(Object.assign({}, t, { id: t.id || newId('t'), regionId, event })));
+  if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, H.teams.length).setValues(rows);
+  return getTeams(ss);
 }
 function replacePlayers(ss, list) {
   const sheet = sheetOf(ss, 'players'); clearRows(sheet);

@@ -110,6 +110,17 @@ const Store = (() => {
       return (await gasPost({ action: 'savePlayers', players: list })).players;
     },
     async savePlayer(p) { return this.savePlayers([p]); },
+    async deletePlayers(ids) {
+      requireAdmin();
+      if (!ids.length) { const d = mode() === 'local' ? localLoad() : null; return d ? { players: clone(d.players), teams: clone(d.teams) } : null; }
+      if (mode() === 'local') {
+        const d = localLoad(); const set = new Set(ids);
+        d.players = d.players.filter(p => !set.has(p.id));
+        d.teams.forEach(t => { t.members = (t.members || []).filter(m => !set.has(m)); });
+        localSave(d); return { players: clone(d.players), teams: clone(d.teams) };
+      }
+      const r = await gasPost({ action: 'deletePlayers', ids }); return { players: r.players, teams: r.teams };
+    },
     async deletePlayer(id) {
       requireAdmin();
       if (mode() === 'local') {
@@ -132,6 +143,17 @@ const Store = (() => {
       return (await gasPost({ action: 'saveTeams', teams: list })).teams;
     },
     async saveTeam(t) { return this.saveTeams([t]); },
+    /** 특정 지역·종목의 팀을 통째로 교체 (신청서 업로드용) */
+    async replaceTeams(regionId, event, list) {
+      requireAdmin();
+      if (mode() === 'local') {
+        const d = localLoad();
+        d.teams = d.teams.filter(t => !(t.regionId === regionId && t.event === event));
+        list.forEach(t => d.teams.push({ ...t, id: t.id || uid('t'), regionId, event }));
+        localSave(d); return clone(d.teams);
+      }
+      return (await gasPost({ action: 'replaceTeams', regionId, event, teams: list })).teams;
+    },
     async deleteTeam(id) {
       requireAdmin();
       if (mode() === 'local') { const d = localLoad(); d.teams = d.teams.filter(t => t.id !== id); localSave(d); return clone(d.teams); }

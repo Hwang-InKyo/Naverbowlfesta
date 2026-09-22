@@ -59,9 +59,21 @@ python3 -m http.server 8080   # http://localhost:8080
 
 시트(`설정`, `지역`, `선수`, `팀`, `결과`)는 첫 호출 시 자동 생성됩니다. 조회는 누구나, 수정은 관리자 토큰(12시간)이 있어야 합니다.
 
-## 신청서 일괄 등록 형식 (임시)
+## 참가 신청서 업로드
 
-선수 탭 → 신청서 일괄 등록에 한 줄에 한 명씩 붙여넣기:
+선수 탭(관리자) → **참가 신청서 업로드 (엑셀)** 에서 클럽별 신청서 `.xlsx` 파일을 선택하면 다음을 자동으로 읽어 미리보기 후 등록합니다.
+
+- `클럽명` 옆 칸 → 지역(클럽). 없으면 새로 만듭니다.
+- 개인전 블록(`1조`, `2조`… 라벨 아래 `성명 | 성별 | 일반 핸디 | 시니어핸디 | 사이드`) → 선수, 조 배정, 핸디(일반+시니어), 사이드 여부
+- `3인조` 명단 → 지역 대표 지정
+- `스카치` 팀(2명씩), `베이커` 팀(3명씩) → 팀 생성. 베이커는 여성 1명 +3, 2명 이상 +5 핸디를 자동 입력(수정 가능)
+- 신청서의 조 이름이 설정의 조 이름과 같으면 그대로, 다르면 순서대로 대응
+- "기존 선수·팀을 신청서 기준으로 교체"를 켜면 그 클럽의 이전 등록 내용을 신청서 내용으로 갱신합니다 (이미 입력된 점수는 같은 이름 선수에 유지)
+- 파서는 `js/signup.js` (순수 함수, `test/signup.test.js` 에서 실제 신청서로 검증)
+
+### 텍스트로 일괄 등록
+
+같은 화면 아래에 한 줄에 한 명씩 붙여넣기:
 ```
 이름,지역,성별(남/여),생년,핸디,종목,대표
 홍길동,서울,남,1975,0,개인 스카치,대표
@@ -76,11 +88,13 @@ index.html          화면 골격
 css/style.css       스타일 (모바일 우선)
 js/ranking.js       순위·포인트 집계 엔진 (순수 함수)
 js/lanes.js         조 편성 / 레인 배정 엔진 (순수 함수)
+js/signup.js        엑셀 참가 신청서 파서 (순수 함수)
+js/vendor/xlsx.full.min.js  SheetJS (엑셀 읽기)
 js/store.js         데이터 계층 (로컬 localStorage / Apps Script 서버)
 js/sample-data.js   데모 데이터
 js/app.js           UI
 gas/Code.gs         Google Apps Script 백엔드
-test/               node --test test/ranking.test.js test/lanes.test.js
+test/               node --test test/ranking.test.js test/lanes.test.js test/signup.test.js
 ```
 
 ### 데이터 모델
@@ -89,7 +103,7 @@ settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', l
            groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker},
            repCount, points:{individualM,individualF,reps,scotch,baker}, schedule, rulesNote }
 region   { id, name, leader, note }
-player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane, pos, games[], events:{individual,scotch,baker}, note }
+player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane, pos, games[], events:{individual,scotch,baker,side}, note }
 team     { id, event:'scotch'|'baker', regionId, name, members:[playerId], lane, handicap, adjust, games[] }
 results  확정 스냅샷 (Ranking.regionStandings 결과)
 ```
