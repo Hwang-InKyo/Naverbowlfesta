@@ -114,34 +114,54 @@
     document.addEventListener('submit', onSubmit);
     document.addEventListener('change', onChange);
     document.addEventListener('input', onInput);
+    document.addEventListener('compositionstart', () => { state.composing = true; });
+    document.addEventListener('compositionend', e => { state.composing = false; const attr = e.target && e.target.dataset && e.target.dataset.input; if (attr) { onInput({ target: e.target }); } else if (state.pendingRender) { const a = state.pendingRender; state.pendingRender = null; renderKeepingInput(a); } });
   }
 
   // ===== 렌더 =====
+  function tabHtml(tab) {
+    if (view() !== 'admin') {
+      switch (tab) {
+        case 'home': return renderPublicHome();
+        case 'search': return renderSearch();
+        case 'assign': return renderPublicAssign();
+        case 'rank': return renderRank();
+      }
+      return '';
+    }
+    switch (tab) {
+      case 'home': return renderAdminHome();
+      case 'players': return renderPlayers();
+      case 'assign': return renderAssign();
+      case 'individual': return renderIndividual();
+      case 'scotch': case 'baker': return renderTeamEvent(tab);
+      case 'standings': return renderStandings();
+      case 'settings': return renderSettings();
+    }
+    return '';
+  }
   function render() {
     const admin = view() === 'admin';
     $$('#admin-nav .side-item').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
     $$('#bottom-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
     $$('.tab-content').forEach(sec => sec.classList.toggle('active', sec.id === 'tab-' + state.tab));
     if (admin) { $('#topbar-title').textContent = ADMIN_TITLES[state.tab] || ''; $('#topbar-sub').textContent = S().name || ''; }
-    const el = $('#tab-' + state.tab);
-    if (!admin) {
-      switch (state.tab) {
-        case 'home': el.innerHTML = renderPublicHome(); break;
-        case 'search': el.innerHTML = renderSearch(); break;
-        case 'assign': el.innerHTML = renderPublicAssign(); break;
-        case 'rank': el.innerHTML = renderRank(); break;
-      }
-      return;
-    }
-    switch (state.tab) {
-      case 'home': el.innerHTML = renderAdminHome(); break;
-      case 'players': el.innerHTML = renderPlayers(); break;
-      case 'assign': el.innerHTML = renderAssign(); break;
-      case 'individual': el.innerHTML = renderIndividual(); break;
-      case 'scotch': case 'baker': el.innerHTML = renderTeamEvent(state.tab); break;
-      case 'standings': el.innerHTML = renderStandings(); break;
-      case 'settings': el.innerHTML = renderSettings(); break;
-    }
+    $('#tab-' + state.tab).innerHTML = tabHtml(state.tab);
+  }
+  /**
+   * 검색어 입력 중 다시 그리기: 입력칸 DOM 노드는 그대로 두고 나머지만 교체한다.
+   * (입력칸을 새로 만들면 한글 조합이 끊겨 "호ㅏㅇ" 처럼 입력된다)
+   */
+  function renderKeepingInput(attr) {
+    const sec = $('#tab-' + state.tab); if (!sec) return;
+    const live = sec.querySelector(`[data-input="${attr}"]`);
+    const tmp = document.createElement('div'); tmp.innerHTML = tabHtml(state.tab);
+    const fresh = tmp.querySelector(`[data-input="${attr}"]`);
+    const wasActive = live && document.activeElement === live;
+    const selStart = live ? live.selectionStart : null, selEnd = live ? live.selectionEnd : null;
+    if (live && fresh) fresh.replaceWith(live);
+    sec.replaceChildren(...tmp.childNodes);
+    if (wasActive) { live.focus({ preventScroll: true }); try { if (selStart != null) live.setSelectionRange(selStart, selEnd); } catch (e) { /* type=number 등 */ } }
   }
   const subtabs = (items, cur, action, attr) => `<div class="subtabs">${items.map(([k, l]) => `<button class="subtab ${cur === k ? 'active' : ''}" data-action="${action}" data-${attr}="${esc(k)}">${l}</button>`).join('')}</div>`;
   const statusBadge = () => { const st = S().status; return `<span class="badge ${st === 'final' ? 'final' : st === 'live' ? 'live' : 'upcoming'}">${{ ready: '준비중', live: '진행중', final: '확정' }[st] || st}</span>`; };
@@ -919,14 +939,14 @@
   }
   function debouncedRender(attr) {
     clearTimeout(state.qTimer);
-    state.qTimer = setTimeout(() => { render(); const i = $(`[data-input="${attr}"]`); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250);
+    state.qTimer = setTimeout(() => { if (state.composing) { state.pendingRender = attr; return; } renderKeepingInput(attr); }, 200);
   }
   function onInput(e) {
     const el = e.target;
     if (el.dataset.input === 'pub-q') { state.q = el.value; state.searchId = ''; return debouncedRender('pub-q'); }
     if (el.dataset.input === 'pub-assign-q') { state.pubAssignQ = el.value; state.pubAssignId = ''; return debouncedRender('pub-assign-q'); }
     if (el.dataset.input === 'rank-q') { state.rankQ = el.value; return debouncedRender('rank-q'); }
-    if (el.dataset.input === 'players-q') { state.playersQ = el.value; clearTimeout(state.qTimer); state.qTimer = setTimeout(() => { render(); const i = $('[data-input="players-q"]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); }
+    if (el.dataset.input === 'players-q') { state.playersQ = el.value; return debouncedRender('players-q'); }
   }
 
   document.addEventListener('DOMContentLoaded', init);
