@@ -229,3 +229,5 @@ header .subtitle { opacity: 0.92; }
 .mode-badge { background: rgba(0,0,0,0.18); }
 .mode-badge.remote { background: rgba(0,0,0,0.28); }
 .ev.side { background: #6b6f76; }
+.tbl tr.imp-fuzzy td { background: #fff8e1; }
+.tbl tr.imp-none td { background: #f5f5f5; color: var(--text-light); }

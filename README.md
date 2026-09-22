@@ -59,6 +59,18 @@ python3 -m http.server 8080   # http://localhost:8080
 
 시트(`설정`, `지역`, `선수`, `팀`, `결과`)는 첫 호출 시 자동 생성됩니다. 조회는 누구나, 수정은 관리자 토큰(12시간)이 있어야 합니다.
 
+## 점수 입력 (사진 → CSV 붙여넣기)
+
+볼링장 점수 시스템과 연동되지 않으므로 출력물을 촬영해 AI 앱(클로드 등)에서 CSV로 뽑은 뒤 붙여넣습니다.
+
+1. 점수 입력 화면(개인전 조별 / 스카치 / 베이커)의 **점수표 붙여넣기로 일괄 입력** 카드에서 **AI 요청문 복사**
+2. 클로드 앱에 사진과 요청문을 보내 `이름,1게임,2게임,3게임` 형식 CSV를 받음
+3. 텍스트를 붙여넣거나 .csv/.txt 파일을 선택 → **미리보기**
+4. 이름이 등록 선수(기본: 현재 조)와 자동으로 매칭됩니다. 정확히 일치하지 않으면 가장 비슷한 선수를 골라 노란색으로 표시하니 확인 후 바꿀 수 있고, 매칭 안 된 줄은 건너뜁니다. 팀 종목은 팀명 또는 팀원 이름으로 매칭
+5. **점수 적용** → 자동 저장. 비어 있는 게임 칸은 기존 값 유지
+
+파서·매칭은 `js/scores-import.js` (탭/공백/슬래시 구분, 머리글 무시, 앞의 숫자는 레인으로 해석, 편집 거리 기반 유사 이름 매칭).
+
 ## 참가 신청서 업로드
 
 선수 탭(관리자) → **참가 신청서 업로드 (엑셀)** 에서 클럽별 신청서 `.xlsx` 파일을 선택하면 다음을 자동으로 읽어 미리보기 후 등록합니다.
@@ -89,12 +101,13 @@ css/style.css       스타일 (모바일 우선)
 js/ranking.js       순위·포인트 집계 엔진 (순수 함수)
 js/lanes.js         조 편성 / 레인 배정 엔진 (순수 함수)
 js/signup.js        엑셀 참가 신청서 파서 (순수 함수)
+js/scores-import.js 점수표 텍스트/CSV 파서·이름 매칭 (순수 함수)
 js/vendor/xlsx.full.min.js  SheetJS (엑셀 읽기)
 js/store.js         데이터 계층 (로컬 localStorage / Apps Script 서버)
 js/sample-data.js   데모 데이터
 js/app.js           UI
 gas/Code.gs         Google Apps Script 백엔드
-test/               node --test test/ranking.test.js test/lanes.test.js test/signup.test.js
+test/               node --test test/*.test.js test/scores-import.test.js
 ```
 
 ### 데이터 모델

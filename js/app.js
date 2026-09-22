@@ -10,7 +10,7 @@
     data: null, tab: 'home',
     playersRegion: '', playersGender: '', playersQ: '', editPlayer: null, editRegion: null,
     assignSub: 'A', indSub: 'M', teamSub: { scotch: 'rank', baker: 'rank' }, scoreGroup: '',
-    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: []
+    dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: [], scoreImport: null
   };
 
   // ===== 유틸 =====
@@ -342,7 +342,7 @@
     const list = d.players.filter(p => p.group === gid);
     const rows = Ranking.playerRows(list, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
     const done = rows.filter(r => r.gamesPlayed === n).length;
-    return `<div class="card"><h2>개인전 점수 입력 <select data-change="score-group" style="width:auto">${groupOptions(gid)}</select></h2>
+    return renderScoreImport('individual', gid) + `<div class="card"><h2>개인전 점수 입력 <select data-change="score-group" style="width:auto">${groupOptions(gid)}</select></h2>
       <p class="muted small mb">입력하면 자동 저장됩니다 · 완료 ${done}/${rows.length}명 <span class="save-state" id="save-state"></span></p>
       <div class="table-scroll"><table class="tbl"><thead><tr><th>레인</th><th class="left">이름</th><th class="left">지역</th><th>핸디</th>${gameHeads(n)}<th>합계</th><th>총점</th></tr></thead><tbody>
       ${rows.map(r => `<tr data-row="${esc(r.playerId)}"><td>${r.lane ? r.lane + '-' + r.pos : '-'}</td><td class="left"><b>${esc(r.name)}</b>${r.gender === 'F' ? ' <span class="badge gender-F">여</span>': ''}</td><td class="left small">${esc(r.regionName)}</td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-pscore="${esc(r.playerId)}" data-g="${i}" value="${g == null ? '' : g}"></td>`).join('')}<td class="c-scratch">${r.scratch}</td><td class="c-total strong">${r.total}</td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">이 조에 선수가 없습니다. 배정 탭에서 조를 편성하세요.</td></tr>`}
@@ -360,7 +360,7 @@
     if (cur === 'score') {
       const rows = Ranking.teamRows(d.teams, event, res.playerRows, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || a.regionName.localeCompare(b.regionName, 'ko'));
       const done = rows.filter(r => r.gamesPlayed === n).length;
-      return html + `<div class="card"><h2>${ev.name} 점수 입력</h2><p class="muted small mb">팀 핸디는 배정 탭에서 팀별로 입력 · 완료 ${done}/${rows.length}팀 <span class="save-state" id="save-state"></span></p>
+      return html + renderScoreImport(event) + `<div class="card"><h2>${ev.name} 점수 입력</h2><p class="muted small mb">팀 핸디는 배정 탭에서 팀별로 입력 · 완료 ${done}/${rows.length}팀 <span class="save-state" id="save-state"></span></p>
         <div class="table-scroll"><table class="tbl"><thead><tr><th>레인</th><th class="left">지역</th><th class="left">팀</th><th>핸디</th>${gameHeads(n)}<th>합계</th><th>총점</th></tr></thead><tbody>
         ${rows.map(r => `<tr data-row="${esc(r.teamId)}"><td>${r.lane || '-'}</td><td class="left">${esc(r.regionName)}</td><td class="left"><b>${esc(r.name)}</b></td><td>${r.handicap}</td>${r.games.map((g, i) => `<td><input type="number" min="0" max="300" inputmode="numeric" data-tscore="${esc(r.teamId)}" data-g="${i}" value="${g == null ? '' : g}"></td>`).join('')}<td class="c-scratch">${r.scratch}</td><td class="c-total strong">${r.total}</td></tr>`).join('') || `<tr><td colspan="${n + 6}" class="empty">팀이 없습니다. 배정 탭에서 팀을 만드세요.</td></tr>`}
         </tbody></table></div></div>`;
@@ -371,6 +371,73 @@
       ${ranked.map(r => `<tr class="rank-${r.rank}"><td>${medal(r.rank)}</td><td class="left">${esc(r.regionName)}</td><td class="left"><b>${esc(r.name)}</b><br><small class="muted">${r.memberNames.map(esc).join(', ')}</small></td><td>${r.lane || '-'}</td><td>${r.handicap}</td>${gamesOf(r, n)}<td>${r.scratch}</td><td class="strong">${r.total}</td><td class="pts">${Ranking.pointsForRank(r.rank, pts) || ''}</td></tr>`).join('') || `<tr><td colspan="${n + 9}" class="empty">등록된 팀이 없습니다.</td></tr>`}
       </tbody></table></div></div>`;
     return html;
+  }
+
+  // ----- 점수표 붙여넣기 입력 -----
+  const IMPORT_PROMPT = n => `이 볼링 점수표 사진에서 선수별 이름과 게임 점수를 뽑아줘. 설명이나 표 없이 한 줄에 한 명씩 "이름,1게임,2게임${n >= 3 ? ',3게임' : ''}" 형식의 CSV로만 출력해. 레인 번호가 보이면 맨 앞에 "레인," 을 붙여줘. 합계·핸디·순위는 넣지 마.`;
+
+  function importCandidates(event, gid) {
+    const d = state.data; const s = S();
+    if (event === 'individual') {
+      const scope = state.scoreImport && state.scoreImport.scope === 'all' ? d.players : d.players.filter(p => p.group === gid);
+      return scope.map(p => ({ id: p.id, names: [p.name], lane: p.lane || null, label: `${p.name} (${regionName(p.regionId)}${p.group ? ' · ' + groupName(p.group) : ''}${p.lane ? ' · ' + p.lane + '레인' : ''})` }));
+    }
+    const pr = Ranking.playerRows(d.players, d.regions, s);
+    return Ranking.teamRows(d.teams, event, pr, d.regions, s).map(t => ({ id: t.teamId, names: [t.name].concat(t.memberNames), lane: t.lane || null, label: `${t.name} (${t.regionName}${t.lane ? ' · ' + t.lane + '레인' : ''})` }));
+  }
+
+  function renderScoreImport(event, gid) {
+    const s = S(); const n = s.games[event]; const imp = state.scoreImport && state.scoreImport.event === event ? state.scoreImport : null;
+    let html = `<div class="card"><h2>점수표 붙여넣기로 일괄 입력</h2>
+      <p class="muted small mb">볼링장 출력물을 찍어 클로드 앱 등에 올리고 아래 요청문으로 CSV를 받은 뒤 여기에 붙여넣으세요. 한 줄에 한 ${event === 'individual' ? '명' : '팀'}: <code>이름,1게임,2게임${n >= 3 ? ',3게임' : ''}</code> (레인 번호가 앞에 있어도 됩니다. 탭·공백·슬래시 구분도 인식)</p>
+      <div class="row mb"><button class="btn btn-xs btn-outline" data-action="copy-prompt" data-n="${n}">AI 요청문 복사</button><label class="btn btn-xs btn-outline" style="cursor:pointer">CSV/텍스트 파일 <input type="file" accept=".csv,.txt,text/plain,text/csv" data-change="score-import-file" style="display:none"></label>
+        ${event === 'individual' ? `<select data-change="score-import-scope" style="width:auto"><option value="group" ${imp && imp.scope === 'all' ? '' : 'selected'}>현재 조에서 찾기</option><option value="all" ${imp && imp.scope === 'all' ? 'selected' : ''}>전체 선수에서 찾기</option></select>` : ''}</div>
+      <textarea id="score-import-text" class="score-import-text" placeholder="이진엽,189,174,180&#10;신희남,150,160,170">${esc(imp ? imp.text : '')}</textarea>
+      <div class="row mt"><button class="btn btn-small btn-primary" data-action="score-import-preview" data-event="${event}">미리보기</button>${imp && imp.rows ? '<button class="btn btn-small btn-outline" data-action="score-import-clear">지우기</button>' : ''}</div>`;
+    if (imp && imp.rows) {
+      const cands = importCandidates(event, gid);
+      const matched = imp.rows.filter(r => r.candidateId).length;
+      html += `<h3>미리보기 <span class="muted small">${imp.rows.length}줄 · 매칭 ${matched}${imp.rows.length - matched ? ` · 미매칭 ${imp.rows.length - matched}` : ''}</span></h3>
+        <div class="table-scroll"><table class="tbl"><thead><tr><th class="left">읽은 이름</th><th class="left">적용 대상</th>${gameHeads(n)}<th>상태</th></tr></thead><tbody>
+        ${imp.rows.map((r, i) => `<tr class="${r.candidateId ? (r.confidence < 1 ? 'imp-fuzzy' : '') : 'imp-none'}"><td class="left"><b>${esc(r.name)}</b>${r.lane != null ? ` <small class="muted">${r.lane}레인</small>` : ''}</td>
+          <td class="left"><select class="sm" data-imp-row="${i}"><option value="">(건너뜀)</option>${cands.map(c => `<option value="${esc(c.id)}" ${c.id === r.candidateId ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></td>
+          ${Array.from({ length: n }, (_, g) => `<td><input type="number" class="sm" min="0" max="300" data-imp-g="${g}" data-imp-i="${i}" value="${r.games[g] == null ? '' : r.games[g]}"></td>`).join('')}
+          <td>${r.candidateId ? (r.confidence < 1 ? '<span class="badge live">확인 필요</span>' : '<span class="badge final">일치</span>') : '<span class="badge">대상 없음</span>'}</td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="muted small mt">노란 줄은 이름이 정확히 일치하지 않아 가장 비슷한 대상을 고른 것입니다. 적용 대상을 확인하거나 바꾸세요. 비어 있는 게임 칸은 기존 값을 유지합니다.</p>
+        <div class="row mt"><button class="btn btn-small btn-success" data-action="score-import-apply" data-event="${event}">${matched}${event === 'individual' ? '명' : '팀'} 점수 적용</button></div>`;
+    }
+    return html + '</div>';
+  }
+
+  function previewScoreImport(event, gid) {
+    const s = S(); const n = s.games[event];
+    const text = ($('.tab-content.active #score-import-text') || {}).value || '';
+    const scope = state.scoreImport && state.scoreImport.scope || 'group';
+    state.scoreImport = { event, text, scope, rows: null };
+    const rows = ScoresImport.parse(text, n);
+    if (!rows.length) { toast('읽을 수 있는 줄이 없습니다. "이름,점수,점수" 형식인지 확인하세요.', true); return render(); }
+    state.scoreImport.rows = ScoresImport.match(rows, importCandidates(event, gid));
+    render();
+  }
+
+  async function applyScoreImport(event) {
+    const imp = state.scoreImport; if (!imp || !imp.rows) return;
+    const s = S(); const n = s.games[event]; let count = 0;
+    const used = new Set();
+    imp.rows.forEach(r => {
+      if (!r.candidateId || used.has(r.candidateId)) return;
+      const target = event === 'individual' ? playerById(r.candidateId) : teamById(r.candidateId);
+      if (!target) return;
+      used.add(r.candidateId);
+      target.games = target.games || []; while (target.games.length < n) target.games.push(null);
+      for (let g = 0; g < n; g++) if (r.games[g] != null && r.games[g] !== '') target.games[g] = num(r.games[g]);
+      markDirty(event === 'individual' ? 'player' : 'team', target.id); count++;
+    });
+    await flush();
+    state.scoreImport = null;
+    toast(`${count}${event === 'individual' ? '명' : '팀'}의 점수를 적용했습니다.`);
+    render();
   }
 
   // ----- 지역 종합 -----
@@ -469,6 +536,10 @@
       case 'signup-register': { const msg = await run(() => registerSignup(num(el.dataset.i))); if (msg) toast(msg); return render(); }
       case 'signup-register-all': { const msgs = []; await run(async () => { for (let i = 0; i < state.uploads.length; i++) { const m = await registerSignup(i); if (m) msgs.push(m); } }); toast(msgs.length + '개 클럽 등록 완료'); return render(); }
       case 'signup-clear': state.uploads = []; return render();
+      case 'copy-prompt': { const t = IMPORT_PROMPT(num(el.dataset.n)); try { await navigator.clipboard.writeText(t); toast('요청문을 복사했습니다. AI 앱에 사진과 함께 붙여넣으세요.'); } catch (e) { prompt('아래 요청문을 복사하세요.', t); } return; }
+      case 'score-import-preview': return previewScoreImport(el.dataset.event, state.scoreGroup || S().groups[0].id);
+      case 'score-import-apply': return applyScoreImport(el.dataset.event);
+      case 'score-import-clear': state.scoreImport = null; return render();
       case 'edit-region': state.editRegion = { ...regionById(id) }; return render();
       case 'cancel-region': state.editRegion = null; return render();
       case 'del-region': if (!confirm(`"${regionName(id)}" 지역을 삭제할까요?`)) return; await run(async () => { d.regions = await Store.deleteRegion(id); }, '삭제되었습니다.'); return render();
@@ -592,7 +663,11 @@
     if (k === 'players-region') { state.playersRegion = el.value; return render(); }
     if (k === 'players-gender') { state.playersGender = el.value; return render(); }
     if (k === 'team-region') { state.teamRegion = el.value; return render(); }
-    if (k === 'score-group') { flush(); state.scoreGroup = el.value; return render(); }
+    if (k === 'score-group') { flush(); state.scoreGroup = el.value; if (state.scoreImport) state.scoreImport.rows = null; return render(); }
+    if (k === 'score-import-file') { const file = el.files[0]; el.value = ''; if (!file) return; const rd = new FileReader(); rd.onload = () => { const ta = $('.tab-content.active #score-import-text'); if (ta) ta.value = String(rd.result); }; rd.readAsText(file); return; }
+    if (k === 'score-import-scope') { if (!state.scoreImport) state.scoreImport = { event: state.tab === 'individual' ? 'individual' : state.tab, text: ($('.tab-content.active #score-import-text') || {}).value || '', rows: null }; state.scoreImport.scope = el.value; if (state.scoreImport.rows) return previewScoreImport(state.scoreImport.event, state.scoreGroup || S().groups[0].id); return; }
+    if (el.dataset.impRow != null) { const r = state.scoreImport && state.scoreImport.rows[num(el.dataset.impRow)]; if (r) { r.candidateId = el.value || null; r.confidence = 1; } return render(); }
+    if (el.dataset.impI != null) { const r = state.scoreImport && state.scoreImport.rows[num(el.dataset.impI)]; if (r) r.games[num(el.dataset.impG)] = el.value === '' ? null : Math.max(0, Math.min(300, num(el.value))); return; }
     if (k === 'signup-files') { const files = [...el.files]; el.value = ''; return readSignupFiles(files); }
     if (el.dataset.uploadRegion != null) { const u = state.uploads[num(el.dataset.uploadRegion)]; if (u) u.regionName = el.value.trim(); return render(); }
     if (el.dataset.uploadReplace != null) { const u = state.uploads[num(el.dataset.uploadReplace)]; if (u) u.replace = el.checked; return; }
