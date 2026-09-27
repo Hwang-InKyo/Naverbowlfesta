@@ -19,15 +19,19 @@ const teams = [
   { id: 't3', event: 'baker', regionId: 'r3', members: ['p5', 'p6'], handicap: 3, games: [150, 150] }    // invalid size (2 of 3)
 ];
 
-test('manual handicap, group bonus and total adjustment', () => {
+test('per-game handicap vs once-per-total group bonus and adjustment', () => {
   const s = R.mergeSettings({ groups: [{ id: 'A', name: '1조', bonus: 10 }, { id: 'B', name: '2조', bonus: 0 }] });
-  assert.equal(R.playerHandicap({ handicap: 15, group: 'A' }, s), 25);
-  assert.equal(R.playerHandicap({ handicap: 15, group: 'B' }, s), 15);
-  assert.equal(R.playerHandicap({ handicap: 15, group: '' }, s), 15);
-  const rows = R.playerRows([{ id: 'x', name: 'X', gender: 'M', handicap: 5, group: 'A', adjust: -21, games: [200, 200, 200] }, { id: 'y', name: 'Y', gender: 'M', handicap: 5, group: 'A', adjust: -21, games: [null, null, null] }], regions, s);
+  assert.equal(R.playerHandicap({ handicap: 15, group: 'A' }, s), 15); // 조 보너스는 게임당 핸디에 포함되지 않음
+  const rows = R.playerRows([
+    { id: 'x', name: 'X', gender: 'F', handicap: 15, group: 'A', adjust: -21, games: [200, 200, 200] }, // 600 + 15×3 + 10 - 21 = 634
+    { id: 'y', name: 'Y', gender: 'M', handicap: 5, group: 'A', adjust: 0, games: [null, null, null] },
+    { id: 'z', name: 'Z', gender: 'M', handicap: 5, group: 'A', adjust: 0, games: [180, null, null] }        // 180 + 5 + 10 = 195 (보너스는 1회)
+  ], regions, s);
   assert.equal(rows[0].handicap, 15);
-  assert.equal(rows[0].total, 600 + 45 - 21);
-  assert.equal(rows[1].total, 0); // 미입력 선수는 가감 미적용
+  assert.equal(rows[0].bonus, 10);
+  assert.equal(rows[0].total, 634);
+  assert.equal(rows[1].total, 0); // 미입력 선수는 보너스·가감 미적용
+  assert.equal(rows[2].total, 195);
   const tr = R.teamRows([{ id: 't', event: 'baker', regionId: 'r1', members: [], handicap: 5, adjust: -3, games: [100, 100] }], 'baker', [], regions, s)[0];
   assert.equal(tr.total, 200 + 10 - 3);
 });
@@ -57,6 +61,20 @@ test('individual ranking by gender with tiebreak and shared ranks', () => {
   // 완전 동점 → 공동 순위
   const tie = R.individualRanking(R.playerRows([{ id: 'a', name: 'A', gender: 'M', games: [200] }, { id: 'b', name: 'B', gender: 'M', games: [200] }, { id: 'c', name: 'C', gender: 'M', games: [100] }], regions, { games: { individual: 1 } }));
   assert.deepEqual(tie.map(r => r.rank), [1, 1, 3]);
+});
+
+test('scores entered with handicap already included', () => {
+  const s = R.mergeSettings({ groups: [{ id: 'A', name: '1조', bonus: 10 }], scoresIncludeHandicap: { individual: true, baker: true } });
+  // 볼링장 출력값 215/205/195 에 여성 핸디 15가 이미 포함 → 스크래치 200/190/180
+  const r = R.playerRows([{ id: 'x', name: 'X', gender: 'F', handicap: 15, group: 'A', adjust: 0, games: [215, 205, 195] }], regions, s)[0];
+  assert.equal(r.scratch, 570);
+  assert.equal(r.total, 615 + 10);   // 입력 합계 + 조 보너스, 핸디 재적용 없음
+  assert.equal(r.high, 200); assert.equal(r.low, 180);
+  assert.deepEqual(r.games, [215, 205, 195]); // 표시는 입력값
+  const t = R.teamRows([{ id: 't', event: 'baker', regionId: 'r1', members: [], handicap: 3, adjust: 0, games: [163, 173] }], 'baker', [], regions, s)[0];
+  assert.equal(t.scratch, 330); assert.equal(t.total, 336);
+  const t2 = R.teamRows([{ id: 't', event: 'scotch', regionId: 'r1', members: [], handicap: 3, adjust: 0, games: [163, 173] }], 'scotch', [], regions, s)[0];
+  assert.equal(t2.total, 336 + 6); // scotch 는 미포함 설정 → 핸디 가산
 });
 
 test('tiebreak order: scratch → high → low → older', () => {

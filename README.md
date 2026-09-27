@@ -63,8 +63,9 @@
 
 ### 핸디와 순위 규정
 - **핸디는 관리자가 직접 입력**합니다 (선수별 게임당 핸디, 팀별 게임당 핸디). 규정(여성 15, 시니어 1~5, 최고 20, 장애 7, 베이커 여성 +3/+5 등)은 홈 화면 안내문으로 표시되고 계산은 입력값 기준입니다.
-- **조별 핸디 보너스**: 설정의 조 표에서 아침 조 등 원하는 조에만 게임당 보너스(예: 10)를 지정하면 자동 가산됩니다.
+- **조별 보너스**: 설정의 조 표에서 아침 조 등 원하는 조에만 보너스(예: 10)를 지정하면 **총점에 한 번만** 자동 가산됩니다. 게임당 핸디(여성·시니어·프로 등)는 매 게임 적용됩니다. 총점 = 스크래치 + 핸디×게임수 + 조 보너스 + 가감.
 - **총점 가감**: 프로 -21 같은 총점 단위 가감은 선수/팀의 "가감"에 입력. 게임당 감점(클럽티 -10 등)은 핸디에 음수로 입력.
+- **입력 점수에 핸디 포함 설정**: 볼링장 점수 시스템이 개인 핸디를 미리 적용해 출력하는 경우 설정 → 경기 규정에서 종목별(개인전/스카치/베이커)로 체크합니다. 체크하면 입력값을 그대로 총점에 쓰고(핸디 재적용 없음) 스크래치·하이/로우는 핸디를 뺀 값으로 계산합니다.
 - 개인전 순위 기준: 핸디 포함 총점(기본) 또는 스크래치. 동점은 비핸디(스크래치) → 하이게임 → 로우게임 → 연장자(생년) 순, 그래도 같으면 공동 순위
 - 확정 시 순위·포인트를 스냅샷으로 저장
 
@@ -140,7 +141,7 @@ test/               node --test test/*.test.js test/scores-import.test.js
 ### 데이터 모델
 ```js
 settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', lanes, tableFrom, perTable,
-           groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker},
+           groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker}, scoresIncludeHandicap:{individual,scotch,baker},
            repCount, points:{individualM,individualF,reps,scotch,baker}, schedule, rulesNote }
 region   { id, name, leader, note }
 player   { id, name, regionId, gender, birthYear, handicap, adjust, isRep, group, lane(테이블 번호), pos, games[], events:{individual,scotch,baker,side}, note }

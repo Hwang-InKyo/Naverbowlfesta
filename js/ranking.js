@@ -7,8 +7,12 @@
  *  - baker      : 베이커 (3인, 2게임)
  *
  * 핸디: 규정 계산 없이 관리자가 선수별(게임당)·팀별(게임당)로 직접 입력한다.
- *       조별 보너스(예: 1조 +10)는 설정의 groups[].bonus 로 자동 가산.
- *       총점 가감(예: 프로 -21)은 선수/팀의 adjust 로 입력.
+ *       게임당 핸디(여성·시니어·프로 등)는 매 게임 적용: 핸디 × 친 게임 수.
+ *       조 보너스(예: 1조 +10)는 설정의 groups[].bonus 로, 총점에 한 번만 가산.
+ *       총점 가감(adjust)도 한 번만 가산.
+ *       총점 = 스크래치 + 핸디×게임수 + 조 보너스 + 가감
+ *       scoresIncludeHandicap[종목] = true 이면 입력 점수에 게임당 핸디가 이미 포함된 것으로 보고
+ *       (볼링장 시스템이 핸디를 미리 적용해 출력하는 경우) 핸디를 다시 더하지 않고, 스크래치 = 입력값 − 핸디.
  * 동점: 총점 → 스크래치(비핸디) → 하이게임 → 로우게임 → 연장자(생년 빠른 순)
  *
  * 지역 종합 포인트 (기본 배점)
@@ -32,8 +36,9 @@
     status: 'ready', // ready | live | final
     basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
     games: { individual: 3, scotch: 2, baker: 2 },
+    scoresIncludeHandicap: { individual: false, scotch: false, baker: false }, // 입력 점수에 게임당 핸디 포함 여부
     groups: [{ id: 'A', name: '1조', day: 1, time: '', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '', bonus: 0 }],
-    rulesNote: '개인전: 1인 3게임 총점, 매 게임 우측 4테이블 이동. 남자 1~5위, 여자 1~5위 시상.\n동점: 비핸디 → 하이/로우 → 연장자 순.\n1조(일요일 첫 경기) 핸디 +10점.\n핸디(개인전, 게임당): 여성 15, 시니어(만 60세 이상) 연도별 1~5점, 최고 20점. 장애인 4급 이상 7점(사전 통보).\n스카치: 팀당 2게임, 남녀 2인(여자 초구), 여자 회원 없는 클럽 제외. 장애인 +3/게임. 1~3위 시상.\n베이커: 팀당 2게임, 여자 1명 +3, 여자 2명 이상 +5, 장애인 +3 (게임당). 1~3위 시상.\n감점: 클럽티 미착용 -10/게임, 복장 불이행 -5/게임. 프로: 개인전 총점 -21, 스카치·베이커 -3/게임.',
+    rulesNote: '개인전: 1인 3게임 총점, 매 게임 우측 4테이블 이동. 남자 1~5위, 여자 1~5위 시상.\n동점: 비핸디 → 하이/로우 → 연장자 순.\n1조(일요일 첫 경기) 총점 +10점 (1회).\n핸디(개인전, 매 게임 적용): 여성 15, 시니어(만 60세 이상) 연도별 1~5점, 최고 20점. 장애인 4급 이상 7점(사전 통보).\n스카치: 팀당 2게임, 남녀 2인(여자 초구), 여자 회원 없는 클럽 제외. 장애인 +3/게임. 1~3위 시상.\n베이커: 팀당 2게임, 여자 1명 +3, 여자 2명 이상 +5, 장애인 +3 (게임당). 1~3위 시상.\n감점: 클럽티 미착용 -10/게임, 복장 불이행 -5/게임. 프로: 개인전 총점 -21, 스카치·베이커 -3/게임.',
     perTable: 4,                 // 테이블(좌우 2레인)당 인원
     repCount: 3,
     points: { individualM: [5, 4, 3, 2, 1], individualF: [3, 2, 1], reps: [3, 2, 1], scotch: [3, 2, 1], baker: [3, 2, 1] }
@@ -44,7 +49,7 @@
     const d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if (!s) return d;
     const out = { ...d, ...s };
-    ['games', 'points'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
+    ['games', 'points', 'scoresIncludeHandicap'].forEach(k => { out[k] = { ...d[k], ...(s[k] || {}) }; });
     delete out.handicap; delete out.teamHandicap;
     // 이전 형식(레인 단위) 호환
     if (s.perLane != null && s.perTable == null) out.perTable = s.perLane;
@@ -63,10 +68,8 @@
     return g ? num(g.bonus) : 0;
   }
 
-  /** 게임당 개인 핸디 = 관리자 입력 핸디 + 조 보너스 */
-  function playerHandicap(p, settings) {
-    return num(p.handicap) + groupBonus(p.group, mergeSettings(settings));
-  }
+  /** 게임당 개인 핸디 (관리자 입력값). 조 보너스는 총점에 1회 가산되므로 여기 포함하지 않는다 */
+  function playerHandicap(p) { return num(p.handicap); }
 
   function makeComparator(keys, nameKey) {
     nameKey = nameKey || (r => r.name);
@@ -85,12 +88,18 @@
     return rows;
   }
 
-  function gameStats(games, n) {
+  /**
+   * 게임 통계. included=true 이면 입력값에 게임당 핸디(hcp)가 포함된 것으로 보고 스크래치·하이·로우는 핸디를 뺀 값으로 계산한다.
+   * games 배열(표시용)은 입력값 그대로 둔다.
+   */
+  function gameStats(games, n, included, hcp) {
     const arr = [];
     for (let i = 0; i < n; i++) { const g = (games || [])[i]; arr.push(g === '' || g == null ? null : num(g)); }
     const played = arr.filter(g => g != null);
-    const scratch = played.reduce((s, g) => s + g, 0);
-    return { games: arr, gamesPlayed: played.length, scratch, high: played.length ? Math.max(...played) : 0, low: played.length ? Math.min(...played) : 0, lastGame: played.length ? played[played.length - 1] : 0 };
+    const off = included ? num(hcp) : 0;
+    const sc = played.map(g => g - off);
+    const scratch = sc.reduce((s, g) => s + g, 0);
+    return { games: arr, gamesPlayed: played.length, entered: played.reduce((s, g) => s + g, 0), scratch, high: sc.length ? Math.max(...sc) : 0, low: sc.length ? Math.min(...sc) : 0, lastGame: sc.length ? sc[sc.length - 1] : 0 };
   }
 
   // ===== 개인전 =====
@@ -99,16 +108,16 @@
     const rMap = new Map((regions || []).map(r => [r.id, r]));
     const n = num(s.games.individual, 3);
     return (players || []).map(p => {
-      const g = gameStats(p.games, n);
-      const baseHandicap = num(p.handicap);
-      const bonus = groupBonus(p.group, s);
-      const handicap = baseHandicap + bonus;
-      const adjust = g.gamesPlayed ? num(p.adjust) : 0;
+      const handicap = num(p.handicap);                 // 게임당
+      const included = !!s.scoresIncludeHandicap.individual;
+      const g = gameStats(p.games, n, included, handicap);
+      const bonus = g.gamesPlayed ? groupBonus(p.group, s) : 0;   // 총점 1회
+      const adjust = g.gamesPlayed ? num(p.adjust) : 0;           // 총점 1회
       const region = rMap.get(p.regionId) || {};
-      const total = g.scratch + handicap * g.gamesPlayed + adjust;
+      const total = g.scratch + handicap * g.gamesPlayed + bonus + adjust;
       return {
         playerId: p.id, name: p.name, regionId: p.regionId, regionName: region.name || '(미정)', gender: p.gender === 'F' ? 'F' : 'M',
-        birthYear: num(p.birthYear) || '', handicap, baseHandicap, bonus, adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
+        birthYear: num(p.birthYear) || '', handicap, included, bonus, adjust, onceTotal: bonus + adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
         ...g, total, score: s.basis === 'scratch' ? g.scratch : total,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0
       };
@@ -133,13 +142,14 @@
       const members = (t.members || []).map(id => pMap.get(id)).filter(Boolean);
       const region = rMap.get(t.regionId) || {};
       const handicap = num(t.handicap);
-      const g = gameStats(t.games, n);
+      const included = !!s.scoresIncludeHandicap[event];
+      const g = gameStats(t.games, n, included, handicap);
       const adjust = g.gamesPlayed ? num(t.adjust) : 0;
       const memberNames = members.map(m => m.name);
       return {
         teamId: t.id, event, regionId: t.regionId, regionName: region.name || '(미정)',
         name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
-        lane: t.lane || '', handicap, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
+        lane: t.lane || '', handicap, included, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
         valid: members.length === EVENTS[event].size
       };
