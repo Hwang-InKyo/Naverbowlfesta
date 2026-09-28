@@ -1,0 +1,9 @@
+# Netlify 배포 설정
+#  - 정적 파일(index.html, css, js)은 저장소 루트 그대로 배포
+#  - netlify/functions/api.mjs 가 /api 경로의 백엔드 (Netlify Blobs 저장)
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

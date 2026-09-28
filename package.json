@@ -1,0 +1,12 @@
+{
+  "name": "naverbowlfesta",
+  "private": true,
+  "version": "1.0.0",
+  "description": "제46회 네이버 볼링 동호회 서울 전국대회 운영 시스템",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.1"
+  }
+}

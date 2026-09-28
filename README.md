@@ -59,13 +59,12 @@
 점수·배정 입력은 자동 저장하지 않습니다. 입력 후 카드 하단의 **저장** 버튼을 눌러야 저장되며, 저장하지 않은 변경이 있으면 화면 이동·로그아웃·창 닫기 시 확인창이 뜹니다. 신청서 업로드와 점수표 붙여넣기 "적용"은 즉시 저장됩니다.
 
 ### 데모 모드와 기기 간 공유
-서버(Apps Script) URL을 연결하기 전에는 **데모 모드**로, 입력한 데이터가 그 브라우저의 localStorage에만 저장됩니다. PC에서 입력한 내용이 핸드폰에서 보이지 않는 것은 이 때문입니다. 모든 기기가 같은 데이터를 보려면 아래 "실제 운영" 절차로 Google 스프레드시트를 연결하세요.
+Netlify 배포 주소(naverbowlfesta.netlify.app)에서 열면 자동으로 **서버 모드**가 되어 모든 기기가 같은 데이터를 봅니다. 파일을 직접 열거나 단순 정적 서버·미리보기처럼 `/api`가 없는 곳에서는 **데모 모드**로 떨어져 그 브라우저의 localStorage에만 저장됩니다(상단 배지로 구분).
 
-### 속도 (스프레드시트 연동 시)
-Apps Script + 스프레드시트는 요청마다 1~3초 걸리는 것이 정상입니다. 체감 속도를 위해 두 단계 캐시를 둡니다.
-- **브라우저 캐시**: 마지막으로 받은 데이터를 localStorage에 저장해 두고, 다음 접속 시 그 데이터로 화면을 즉시 그린 뒤 백그라운드로 서버에서 최신 데이터를 받아 갱신합니다.
-- **서버 캐시**: `getAll` 응답 JSON을 Apps Script 캐시에 최대 10분 보관해 시트를 매번 읽지 않습니다. 관리자가 저장하면 즉시 무효화되므로 데이터가 오래된 채로 보이지 않습니다.
-- 회원 화면은 조회 전용이고 관리자 저장은 명시적 저장 버튼으로 한 번에 보내므로 서버 왕복 횟수 자체가 적습니다.
+### 속도
+- **백엔드는 Netlify Functions + Netlify Blobs**입니다. 같은 사이트 안의 함수라 응답이 0.1~0.3초이고, 별도 계정·요금이 없습니다. 전체 데이터를 JSON 문서 하나로 저장합니다.
+- **브라우저 캐시**: 마지막으로 받은 데이터를 localStorage에 두고, 다음 접속 시 즉시 화면을 그린 뒤 백그라운드로 최신 데이터로 갱신합니다.
+- Google Apps Script(`gas/Code.gs`)는 대안으로 남겨두었습니다. 요청마다 1~3초가 걸리므로 필요할 때만 설정 탭에서 그 URL을 넣어 쓰세요(응답 캐시 포함).
 
 ### 전체 기록
 회원용 순위 화면의 **전체기록** 탭에서 개인전 전원의 게임별 점수(성별·조·지역 필터, 이름 검색, CSV)와 스카치·베이커 팀 기록을 볼 수 있습니다.
@@ -86,15 +85,20 @@ Apps Script + 스프레드시트는 요청마다 1~3초 걸리는 것이 정상�
 python3 -m http.server 8080   # http://localhost:8080
 ```
 
-## 실제 운영 (Google Sheets 연동)
+## 실제 운영 (Netlify 배포)
 
-1. Google Sheets 새 스프레드시트 생성 → URL 중 `/d/…/edit` 의 `…` 부분이 스프레드시트 ID
-2. 확장 프로그램 → Apps Script → `gas/Code.gs` 내용 붙여넣기, `SPREADSHEET_ID` 교체
-3. 프로젝트 설정 → 스크립트 속성에 `ADMIN_PIN` 추가
-4. 배포 → 새 배포 → 웹 앱 (실행 사용자: 본인 / 액세스: 모든 사용자) → 웹앱 URL 복사
-5. 관리자 로그인 창의 **⚙ 서버 연결 설정** 또는 설정 탭 → 서버 연결에 URL 입력 (모든 기기 기본값으로 쓰려면 `js/store.js`의 `DEFAULT_API_URL`)
+GitHub 저장소를 Netlify에 연결하면 `main`에 푸시할 때마다 자동 배포됩니다. `netlify.toml`이 정적 파일과 함수 위치를 지정하고, Netlify가 `package.json`의 `@netlify/blobs`를 설치합니다.
 
-시트(`설정`, `지역`, `선수`, `팀`, `결과`)는 첫 호출 시 자동 생성됩니다. 조회는 누구나, 수정은 관리자 토큰(12시간)이 있어야 합니다.
+- **백엔드**: `netlify/functions/api.mjs` → `/api`. 저장소는 Netlify Blobs(스토어 `tournament`, 키 `data`).
+- **관리자 PIN**: 처음에는 `0000`. 관리자 로그인 후 설정 → 관리자 PIN 변경에서 바꾸면 서버(블롭)에만 저장되고 웹 코드에는 내려가지 않습니다. Netlify 환경변수 `ADMIN_PIN`을 두면 앱에서 바꾸기 전까지 그 값을 씁니다.
+- **토큰**: 로그인하면 HMAC 서명된 12시간 토큰을 받습니다. PIN을 바꾸면 기존 토큰은 무효가 되어 다시 로그인합니다.
+- **백업**: 설정 탭의 JSON 내보내기/복원. 스프레드시트가 없으므로 대회 후 이 파일을 보관하세요.
+- 무료 한도(함수 호출 월 12만5천 회, Blobs 1GB)는 이틀 대회에 충분합니다.
+
+### 대안: Google Sheets (Apps Script)
+1. 스프레드시트 생성 → 확장 프로그램 → Apps Script → `gas/Code.gs` 붙여넣기, `SPREADSHEET_ID` 교체
+2. 스크립트 속성에 `ADMIN_PIN` 추가 → 배포 → 웹 앱(모든 사용자) → URL 복사
+3. 설정 탭 → 서버 연결에 그 URL 입력. 기본 백엔드로 돌아가려면 `/api` 입력
 
 ## 점수 입력 (사진 → CSV 붙여넣기)
 
@@ -140,11 +144,13 @@ js/lanes.js         조 편성 / 레인 배정 엔진 (순수 함수)
 js/signup.js        엑셀 참가 신청서 파서 (순수 함수)
 js/scores-import.js 점수표 텍스트/CSV 파서·이름 매칭 (순수 함수)
 js/vendor/xlsx.full.min.js  SheetJS (엑셀 읽기)
-js/store.js         데이터 계층 (로컬 localStorage / Apps Script 서버)
+js/store.js         데이터 계층 (Netlify /api 서버 / Apps Script / 로컬 localStorage)
 js/sample-data.js   데모 데이터
 js/app.js           UI
-gas/Code.gs         Google Apps Script 백엔드
-test/               node --test test/*.test.js test/scores-import.test.js
+netlify/functions/api.mjs  Netlify Functions 백엔드 (Netlify Blobs 저장)
+netlify.toml, package.json  Netlify 배포 설정
+gas/Code.gs         Google Apps Script 백엔드 (대안)
+test/               npm test  (node --test test/*.test.js)
 ```
 
 ### 데이터 모델

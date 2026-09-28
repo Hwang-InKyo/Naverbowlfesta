@@ -1,14 +1,16 @@
 /**
  * store.js - 데이터 저장/조회 계층 (이번 대회 전용)
  *
- *  - 로컬 모드 : 브라우저 localStorage (데모/단일 기기용). API URL 미설정 시 자동.
- *  - 서버 모드 : Google Apps Script 웹앱 (gas/Code.gs) + Google Sheets. 설정 탭에서 URL 입력.
+ *  - 서버 모드 : 기본값 '/api' = Netlify Functions + Netlify Blobs (netlify/functions/api.mjs).
+ *                Google Apps Script 웹앱 URL(gas/Code.gs)을 설정 탭에서 넣으면 그쪽을 대신 사용.
+ *  - 로컬 모드 : 브라우저 localStorage (데모/단일 기기용). 서버가 없는 곳(file://, 정적 서버,
+ *                미리보기)에서 '/api' 가 404 이면 자동으로 이 모드로 떨어진다.
  *  - 조회는 로그인 없이 가능하며, 수정은 관리자 PIN 로그인 후에만 허용된다.
  *
  * 데이터: { settings, regions[], players[], teams[], results }
  */
 const Store = (() => {
-  const DEFAULT_API_URL = ''; // 배포 시 Apps Script 웹앱 URL을 넣으면 설정 없이 서버 모드
+  const DEFAULT_API_URL = '/api'; // Netlify 배포 시 같은 사이트의 함수. 다른 백엔드를 쓰려면 설정 탭에서 URL 변경
   const LS = { data: 'bf_data_v1', api: 'bf_api_url', auth: 'bf_auth_v1', cache: 'bf_cache_v1' };
 
   function lsGet(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } }
@@ -19,7 +21,10 @@ const Store = (() => {
 
   let apiUrl = (lsGet(LS.api) || DEFAULT_API_URL || '').trim();
   let auth = lsGet(LS.auth);
-  function mode() { return apiUrl ? 'remote' : 'local'; }
+  let noServer = false; // 기본 '/api' 가 없는 환경(정적 서버·file://)에서 true → 로컬 모드
+  const usingDefault = () => !lsGet(LS.api) && apiUrl === DEFAULT_API_URL;
+  if (usingDefault() && typeof location !== 'undefined' && location.protocol === 'file:') noServer = true;
+  function mode() { return apiUrl && !noServer ? 'remote' : 'local'; }
   function isAdmin() { return !!(auth && auth.role === 'admin'); }
   function requireAdmin() { if (!isAdmin()) throw new Error('관리자 로그인이 필요합니다.'); }
 
@@ -45,6 +50,7 @@ const Store = (() => {
   // ===== 서버 =====
   async function gasGet(action, params) {
     const res = await fetch(apiUrl + '?' + new URLSearchParams({ action, ...(params || {}) }).toString());
+    if (usingDefault() && (res.status === 404 || !/json/.test(res.headers.get('content-type') || ''))) { noServer = true; throw new Error('NO_SERVER'); }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     return data;
@@ -59,7 +65,7 @@ const Store = (() => {
   return {
     mode, isAdmin, uid,
     getApiUrl() { return apiUrl; },
-    setApiUrl(url) { apiUrl = (url || '').trim(); if (apiUrl) lsSet(LS.api, apiUrl); else lsDel(LS.api); auth = null; lsDel(LS.auth); },
+    setApiUrl(url) { apiUrl = (url || '').trim() || DEFAULT_API_URL; if (apiUrl && apiUrl !== DEFAULT_API_URL) lsSet(LS.api, apiUrl); else lsDel(LS.api); auth = null; lsDel(LS.auth); lsDel(LS.cache); },
 
     async login(pin) {
       if (mode() === 'local') {
@@ -76,7 +82,9 @@ const Store = (() => {
 
     async loadAll() {
       if (mode() === 'local') return publicView(localLoad());
-      const r = await gasGet('getAll');
+      let r;
+      try { r = await gasGet('getAll'); }
+      catch (e) { if (e.message === 'NO_SERVER') return publicView(localLoad()); throw e; } // 서버 없는 환경 → 데모 모드
       const d = { settings: Ranking.mergeSettings(r.settings), regions: r.regions || [], players: r.players || [], teams: r.teams || [], results: r.results || null };
       try { lsSet(LS.cache, { api: apiUrl, at: Date.now(), data: d }); } catch (e) { /* 용량 초과 등 무시 */ }
       return d;
