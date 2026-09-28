@@ -23,6 +23,8 @@ const Store = (() => {
   let auth = lsGet(LS.auth);
   let noServer = false; // 기본 '/api' 가 없는 환경(정적 서버·file://)에서 true → 로컬 모드
   const usingDefault = () => !lsGet(LS.api) && apiUrl === DEFAULT_API_URL;
+  // 실제 배포 주소에서는 서버 오류를 데모 데이터로 감추지 않는다
+  const isProdHost = () => typeof location !== 'undefined' && /\.netlify\.app$/.test(location.hostname);
   if (usingDefault() && typeof location !== 'undefined' && location.protocol === 'file:') noServer = true;
   function mode() { return apiUrl && !noServer ? 'remote' : 'local'; }
   function isAdmin() { return !!(auth && auth.role === 'admin'); }
@@ -50,7 +52,10 @@ const Store = (() => {
   // ===== 서버 =====
   async function gasGet(action, params) {
     const res = await fetch(apiUrl + '?' + new URLSearchParams({ action, ...(params || {}) }).toString());
-    if (usingDefault() && (res.status === 404 || !/json/.test(res.headers.get('content-type') || ''))) { noServer = true; throw new Error('NO_SERVER'); }
+    if (usingDefault() && (res.status === 404 || !/json/.test(res.headers.get('content-type') || ''))) {
+      if (isProdHost()) throw new Error('서버(/api)에 연결할 수 없습니다. Netlify 배포 상태를 확인하세요.');
+      noServer = true; throw new Error('NO_SERVER');
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     return data;

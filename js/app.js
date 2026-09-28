@@ -94,6 +94,7 @@
     document.body.classList.toggle('is-admin', admin);
     document.body.classList.toggle('is-public', !admin);
     $('#side-title').textContent = s.name || '볼링 전국대회';
+    if (s.name && s.name !== '전국대회') document.title = s.name;
     const st = $('#status-badge'); st.textContent = STATUS_LABEL[s.status] || s.status; st.className = 'badge ' + (s.status === 'final' ? 'final' : s.status === 'live' ? 'live' : 'upcoming');
     const mb = $('#mode-badge'); mb.textContent = Store.mode() === 'remote' ? '서버 연결' : '데모'; mb.className = 'mode-badge ' + Store.mode();
     const tabs = admin ? ADMIN_TABS : PUBLIC_TABS;
