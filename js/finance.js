@@ -9,8 +9,9 @@
  *   expenses    [{ id, category, label, amount }]  상품비·물품 등 지출 (게임비는 자동 계산)
  *   payments    { [regionId]: { form, formCounts, formIssues, paid, paidAt, confirmed, note } }
  *   pools       { champ: { basis, prizes[] }, side: { basis, prizes[] } }  내기 순위 기준(total|scratch)과 순위별 상금
- *  정산서의 참가비 수입은 등록된 명단(인원·챔프전·사이드·지역 수)에 단가를 곱해 계산하고,
- *  챔프전·사이드 상금은 순위(동점은 해당 순위 상금을 나눔)대로 지출에 넣는다.
+ *  정산서의 참가비 수입은 등록된 명단(인원·지역 수)에 단가를 곱해 계산한다.
+ *  챔프전·사이드(내기)는 정산서에 넣지 않고 '챔프전 · 사이드' 탭에서 판돈·상금·잔액을 따로 관리한다.
+ *  (입금 확인의 계산 금액에는 신청서에 함께 내는 챔프전·사이드 참가비가 포함된다.)
  *  챔프전: 1조 참가자 중 신청자끼리 3게임 합산 순위. 사이드: 조별로 매 게임 신청자끼리 그 게임 점수 순위.
  */
 const Finance = (() => {
@@ -121,7 +122,14 @@ const Finance = (() => {
     const ch = champRanking(state); const sd = sideSummary(state);
     const basisSel = (name, v) => `<select name="${name}"><option value="total" ${v === 'total' ? 'selected' : ''}>총점 (핸디 포함)</option><option value="scratch" ${v === 'scratch' ? 'selected' : ''}>총핀 (핸디 제외)</option></select>`;
     const gid = state.finSideGroup || (s.groups[0] || {}).id; const sg = sd.groups.find(g => g.group.id === gid) || sd.groups[0];
-    let html = `<div class="card"><h2>내기 설정</h2><form data-form="fin-pools"><div class="form-row">
+    const chPool = ch.participants * fees.champ; const sdPool = sd.participants * fees.side;
+    let html = `<div class="card"><h2>내기 요약 <span class="muted" style="font-weight:500;color:var(--text-3)">정산서와 별도로 관리</span></h2>
+      <div class="table-scroll"><table class="tbl"><thead><tr><th class="left">구분</th><th>신청</th><th>단가</th><th>판돈</th><th>상금 지급</th><th>잔액</th></tr></thead><tbody>
+        <tr><td class="left"><b>챔프전</b> <small class="muted">${esc((s.groups[0] || {}).name || '1조')} · 3게임 합산</small></td><td>${ch.participants}명</td><td class="right">${won(fees.champ)}</td><td class="right">${won(chPool)}</td><td class="right">${won(ch.prizeTotal)}</td><td class="right ${chPool - ch.prizeTotal < 0 ? 'neg' : ''}">${won(chPool - ch.prizeTotal)}</td></tr>
+        ${sd.groups.map(g => `<tr><td class="left"><b>사이드 ${esc(g.group.name)}</b> <small class="muted">게임별 · ${g.played}/${n}게임 집계</small></td><td>${g.participants}명</td><td class="right">${won(fees.side)}</td><td class="right">${won(g.participants * fees.side)}</td><td class="right">${won(g.paid)}</td><td class="right ${g.participants * fees.side - g.paid < 0 ? 'neg' : ''}">${won(g.participants * fees.side - g.paid)}</td></tr>`).join('')}
+        <tr class="strong"><td class="left"><b>합계</b></td><td>${ch.participants + sd.participants}명</td><td></td><td class="right">${won(chPool + sdPool)}</td><td class="right">${won(ch.prizeTotal + sd.paid)}</td><td class="right ${chPool + sdPool - ch.prizeTotal - sd.paid < 0 ? 'neg' : ''}">${won(chPool + sdPool - ch.prizeTotal - sd.paid)}</td></tr>
+      </tbody></table></div></div>
+    <div class="card"><h2>내기 설정</h2><form data-form="fin-pools"><div class="form-row">
         <div class="form-group"><label>챔프전 순위 기준</label>${basisSel('champBasis', fin.pools.champ.basis)}</div>
         <div class="form-group" style="flex:2"><label>챔프전 상금 (1위부터, 쉼표로 구분)</label><input type="text" name="champPrizes" value="${esc(fin.pools.champ.prizes.join(', '))}" placeholder="예: 50000, 30000, 20000"></div>
         <div class="form-group"><label>사이드 순위 기준</label>${basisSel('sideBasis', fin.pools.side.basis)}</div>
@@ -145,14 +153,19 @@ const Finance = (() => {
     return html;
   }
 
+  /** 사이드바의 '챔프전·사이드' 탭 (정산과 별도 관리) */
+  function renderPoolsTab(state) {
+    if (!state.finance) return '<div class="card"><p class="empty">정산 데이터를 불러오지 못했습니다. 다시 로그인해 보세요.</p></div>';
+    return renderPools(state);
+  }
+
   // ===== 화면 =====
   function render(state) {
     if (!state.finance) return '<div class="card"><p class="empty">정산 데이터를 불러오지 못했습니다. 다시 로그인해 보세요.</p></div>';
     const sub = state.finSub || 'payments';
-    const tabs = [['payments', '입금 확인'], ['pools', '챔프전 · 사이드'], ['statement', '정산서'], ['items', '항목 · 단가']];
+    const tabs = [['payments', '입금 확인'], ['statement', '정산서'], ['items', '항목 · 단가']];
     let html = `<div class="subtabs">${tabs.map(([k, l]) => `<button class="subtab ${sub === k ? 'active' : ''}" data-action="fin-sub" data-sub="${k}">${l}</button>`).join('')}</div>`;
     if (sub === 'payments') html += renderPayments(state);
-    else if (sub === 'pools') html += renderPools(state);
     else if (sub === 'statement') html += renderStatement(state);
     else html += renderItems(state);
     return html;
@@ -194,8 +207,6 @@ const Finance = (() => {
     const fin = state.finance; const { tot, games } = stats(state); const fees = fin.fees;
     const income = [];
     income.push({ cat: '참가비', label: '개인 참가비', qty: tot.players, unit: fees.individual });
-    if (fees.champ) income.push({ cat: '챔프전', label: '챔프전 참가비', qty: tot.champ, unit: fees.champ });
-    if (fees.side) income.push({ cat: '사이드', label: '사이드 참가비', qty: tot.side, unit: fees.side });
     if (fees.club) income.push({ cat: '클럽비용', label: '클럽별 비용', qty: tot.regions, unit: fees.club });
     if (fees.clubDonation) income.push({ cat: '클럽찬조금', label: '클럽별 찬조금', qty: tot.regions, unit: fees.clubDonation });
     if (fees.team5) income.push({ cat: '5인조', label: '5인조', qty: tot.regions, unit: fees.team5 });
@@ -207,18 +218,14 @@ const Finance = (() => {
     ].map(g => ({ ...g, unit: fees.gameFee, amount: g.qty * g.games * fees.gameFee }));
     const gameTotal = gameLines.reduce((a, g) => a + g.amount, 0);
     const expTotal = fin.expenses.reduce((a, x) => a + num(x.amount), 0);
-    const prizeLines = [];
-    if (fees.champ) { const ch = champRanking(state); prizeLines.push({ label: '챔프전 상금', detail: `신청 ${ch.participants}명 · 판돈 ${won(ch.participants * fees.champ)}`, amount: ch.prizeTotal }); }
-    if (fees.side) { const sd = sideSummary(state); prizeLines.push({ label: '사이드 상금', detail: `신청 ${sd.participants}명 · 판돈 ${won(sd.participants * fees.side)}`, amount: sd.paid }); }
-    const prizeTotal = prizeLines.reduce((a, x) => a + x.amount, 0);
-    return { income, feeTotal, cashTotal, gameLines, gameTotal, expTotal, prizeLines, prizeTotal, balance: feeTotal + cashTotal - gameTotal - expTotal - prizeTotal };
+    return { income, feeTotal, cashTotal, gameLines, gameTotal, expTotal, balance: feeTotal + cashTotal - gameTotal - expTotal };
   }
 
   function renderStatement(state) {
     const fin = state.finance; const st = statement(state); const s = state.data.settings || {};
     const title = `${esc(s.name || '전국대회')} 정산표`;
     const tr = cells => `<tr>${cells.map(c => `<td class="${c[1] || ''}">${c[0]}</td>`).join('')}</tr>`;
-    return `<div class="card no-print" style="margin-bottom:12px"><div class="row between"><p class="muted small" style="margin:0">참가비·게임비는 등록된 명단과 항목·단가로 자동 계산됩니다. 찬조·상품비는 "항목 · 단가" 탭에서 입력하세요.</p><div class="row"><button class="btn btn-small btn-outline" data-action="csv" data-sel="#stmt-income" data-name="정산_수입">수입 CSV</button><button class="btn btn-small btn-outline" data-action="csv" data-sel="#stmt-expense" data-name="정산_지출">지출 CSV</button><button class="btn btn-small btn-primary" data-action="print">인쇄</button></div></div></div>
+    return `<div class="card no-print" style="margin-bottom:12px"><div class="row between"><p class="muted small" style="margin:0">참가비·게임비는 등록된 명단과 항목·단가로 자동 계산됩니다. 찬조·상품비는 "항목 · 단가" 탭에서 입력하세요. 챔프전·사이드(내기) 참가비와 상금은 정산서에 넣지 않고 사이드바의 "챔프전·사이드" 탭에서 따로 관리합니다.</p><div class="row"><button class="btn btn-small btn-outline" data-action="csv" data-sel="#stmt-income" data-name="정산_수입">수입 CSV</button><button class="btn btn-small btn-outline" data-action="csv" data-sel="#stmt-expense" data-name="정산_지출">지출 CSV</button><button class="btn btn-small btn-primary" data-action="print">인쇄</button></div></div></div>
     <div class="statement">
       <h1>${title}</h1>
       <table class="stmt" id="stmt-income"><thead><tr><th colspan="5" class="sec income">수 입 내 역</th></tr><tr><th>구분</th><th>항목</th><th>인원/수량</th><th>단가</th><th>합계</th></tr></thead><tbody>
@@ -236,12 +243,9 @@ const Finance = (() => {
         <tr><th colspan="5" class="sec sub-expense">상품비 · 물품</th></tr><tr><th>항목</th><th colspan="3">내용</th><th>합계</th></tr>
         ${fin.expenses.map(x => `<tr><td>${esc(x.category)}</td><td colspan="3">${esc(x.label)}</td><td class="num">${won(x.amount)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">없음</td></tr>'}
         <tr class="sub"><td colspan="4">소계</td><td class="num">${won(st.expTotal)}</td></tr>
-        ${st.prizeLines.length ? `<tr><th colspan="5" class="sec sub-expense">내기 상금 (챔프전 · 사이드)</th></tr><tr><th>구분</th><th colspan="3">내용</th><th>합계</th></tr>
-        ${st.prizeLines.map(x => `<tr><td>${esc(x.label)}</td><td colspan="3">${esc(x.detail)}</td><td class="num">${won(x.amount)}</td></tr>`).join('')}
-        <tr class="sub"><td colspan="4">상금 소계</td><td class="num">${won(st.prizeTotal)}</td></tr>` : ''}
       </tbody></table>
-      <table class="stmt final"><thead><tr><th colspan="6" class="sec total">최 종 요 약</th></tr><tr><th>참가비용</th><th>현금찬조</th><th>게임비</th><th>상품비</th><th>내기 상금</th><th>최종 잔액</th></tr></thead>
-        <tbody><tr><td class="num">${won(st.feeTotal)}</td><td class="num">${won(st.cashTotal)}</td><td class="num red">${won(st.gameTotal)}</td><td class="num red">${won(st.expTotal)}</td><td class="num red">${won(st.prizeTotal)}</td><td class="num ${st.balance >= 0 ? 'bal' : 'neg'}">${won(st.balance)}</td></tr></tbody></table>
+      <table class="stmt final"><thead><tr><th colspan="5" class="sec total">최 종 요 약</th></tr><tr><th>참가비용</th><th>현금찬조</th><th>게임비</th><th>상품비</th><th>최종 잔액</th></tr></thead>
+        <tbody><tr><td class="num">${won(st.feeTotal)}</td><td class="num">${won(st.cashTotal)}</td><td class="num red">${won(st.gameTotal)}</td><td class="num red">${won(st.expTotal)}</td><td class="num ${st.balance >= 0 ? 'bal' : 'neg'}">${won(st.balance)}</td></tr></tbody></table>
     </div>`;
   }
 
@@ -310,6 +314,6 @@ const Finance = (() => {
     return false;
   }
 
-  return { render, stats, expectedFor, statement, champRanking, sideGame, sideSummary, assignPrizes, checkSignupFees, uploadFeeHtml, onPaymentChange, onFeesSubmit, onPoolsSubmit, onLineSubmit, onAction, FEE_LABELS };
+  return { render, renderPoolsTab, stats, expectedFor, statement, champRanking, sideGame, sideSummary, assignPrizes, checkSignupFees, uploadFeeHtml, onPaymentChange, onFeesSubmit, onPoolsSubmit, onLineSubmit, onAction, FEE_LABELS };
 })();
 if (typeof module === 'object' && module.exports) module.exports = Finance;

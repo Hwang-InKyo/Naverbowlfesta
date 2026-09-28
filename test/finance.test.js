@@ -50,7 +50,7 @@ test('champRanking: only champ entrants, 3-game total, prizes by rank, outside-1
   assert.deepEqual(Finance.champRanking(st).rows.slice(0, 2).map(r => r.name), ['A', 'B']);
 });
 
-test('sideGame: per group per game ranking with handicap, and statement includes prize expenses', () => {
+test('sideGame: per group per game ranking with handicap; statement excludes betting', () => {
   const players = [
     { id: 'p1', name: 'A', regionId: 'r1', gender: 'M', group: 'A', handicap: 0, games: [200, 150, null], events: { side: true } },
     { id: 'p2', name: 'B', regionId: 'r1', gender: 'F', group: 'A', handicap: 15, games: [190, 190, null], events: { side: true } },
@@ -66,7 +66,7 @@ test('sideGame: per group per game ranking with handicap, and statement includes
   const sd = Finance.sideSummary(st);
   assert.equal(sd.participants, 3); assert.equal(sd.paid, 60000 + 20000);
   const stm = Finance.statement(st);
-  assert.equal(stm.prizeTotal, 80000);
-  assert.equal(stm.feeTotal, 4 * 35000 + 3 * 10000 + 2 * 110000 + 2 * 50000);
-  assert.equal(stm.balance, stm.feeTotal + stm.cashTotal - stm.gameTotal - stm.expTotal - stm.prizeTotal);
+  assert.equal(stm.prizeTotal, undefined, '내기 상금은 정산서에 넣지 않음');
+  assert.equal(stm.feeTotal, 4 * 35000 + 2 * 110000 + 2 * 50000, '사이드·챔프전 참가비는 정산서 수입에서 제외');
+  assert.equal(stm.balance, stm.feeTotal + stm.cashTotal - stm.gameTotal - stm.expTotal);
 });

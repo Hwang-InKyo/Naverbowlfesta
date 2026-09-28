@@ -45,8 +45,8 @@
   /** 총점에 1회 적용되는 값 표시: 조 보너스 + 개인 가감 */
   const onceText = p => { if (!p) return '-'; const b = Ranking.groupBonus(p.group, S()), a = num(p.adjust); const parts = []; if (b) parts.push('조 +' + b); if (a) parts.push((a > 0 ? '+' : '') + a); return parts.join(' ') || '-'; };
   const PUBLIC_TABS = ['home', 'search', 'assign', 'rank'];
-  const ADMIN_TABS = ['home', 'players', 'assign', 'individual', 'scotch', 'baker', 'standings', 'finance', 'settings'];
-  const ADMIN_TITLES = { home: '대시보드', players: '선수 관리', assign: '조 편성 · 레인 배정', individual: '개인전 점수 · 집계', scotch: '스카치 더블', baker: '베이커', standings: '지역 종합', finance: '정산 · 입금 확인', settings: '설정' };
+  const ADMIN_TABS = ['home', 'players', 'assign', 'individual', 'scotch', 'baker', 'standings', 'pools', 'finance', 'settings'];
+  const ADMIN_TITLES = { home: '대시보드', players: '선수 관리', assign: '조 편성 · 레인 배정', individual: '개인전 점수 · 집계', scotch: '스카치 더블', baker: '베이커', standings: '지역 종합', pools: '챔프전 · 사이드 (내기)', finance: '정산 · 입금 확인', settings: '설정' };
   const STATUS_LABEL = { ready: '준비중', live: '진행중', final: '확정' };
   const dayLabel = () => { const s = S(); const today = new Date().toISOString().slice(0, 10); const i = (s.dates || []).indexOf(today); return i >= 0 ? ' · ' + (i + 1) + '일차' : ''; };
   const fmtDate = d => { if (!d) return ''; const dt = new Date(d + 'T00:00:00'); if (isNaN(dt)) return d; return `${dt.getMonth() + 1}.${dt.getDate()}(${'일월화수목금토'[dt.getDay()]})`; };
@@ -145,6 +145,7 @@
       case 'assign': return renderAssign();
       case 'individual': return renderIndividual();
       case 'finance': return Finance.render(state);
+      case 'pools': return Finance.renderPoolsTab(state);
       case 'scotch': case 'baker': return renderTeamEvent(tab);
       case 'standings': return renderStandings();
       case 'settings': return renderSettings();
