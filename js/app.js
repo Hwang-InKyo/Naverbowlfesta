@@ -755,7 +755,9 @@
     <div class="card"><h2>서버 연결</h2><p class="muted small mb">현재: <b>${Store.mode() === 'remote' ? (Store.getApiUrl() === '/api' ? '서버 모드 (Netlify 저장소)' : '서버 모드 (외부 API: ' + esc(Store.getApiUrl()) + ')') : '로컬 데모 모드 (이 브라우저에만 저장)'}</b>. Netlify 배포 주소에서는 기본으로 같은 사이트의 <code>/api</code>(Netlify Functions + Blobs)를 사용합니다. Google Apps Script(gas/Code.gs)를 쓰려면 그 웹앱 URL을 넣고, 기본으로 되돌리려면 <code>/api</code>를 입력하세요.</p>
       <form data-form="set-api"><div class="form-group"><input type="text" name="url" placeholder="/api 또는 https://script.google.com/macros/s/.../exec" value="${esc(Store.getApiUrl())}"></div><div class="row"><button class="btn btn-small btn-primary" type="submit">연결 (다시 로그인)</button>${Store.mode() === 'remote' ? '<button class="btn btn-small btn-outline" type="button" data-action="test-api">연결 테스트</button>': ''}</div></form></div>
     <div class="card"><h2>백업 / 복원</h2><div class="row"><button class="btn btn-small btn-outline" data-action="export-json">JSON 내보내기</button><label class="btn btn-small btn-outline" style="cursor:pointer">JSON 가져오기 <input type="file" accept=".json,application/json" data-change="import-json" style="display:none"></label></div>
-      ${Store.mode() === 'local' ? `<h3 class="mt">로컬 데모 데이터</h3><div class="row"><button class="btn btn-small btn-outline" data-action="reset-demo">데모 데이터로 초기화</button><button class="btn btn-small btn-danger" data-action="reset-empty">모든 데이터 삭제 (빈 상태)</button></div>` : ''}</div>`;
+      ${Store.mode() === 'local' ? `<h3 class="mt">로컬 데모 데이터</h3><div class="row"><button class="btn btn-small btn-outline" data-action="reset-demo">데모 데이터로 초기화</button></div>` : ''}</div>
+    <div class="card" style="border-color:var(--orange-input-line)"><h2>전체 초기화</h2><p class="muted small mb">지역·선수·팀·점수·확정 결과를 모두 삭제합니다. 되돌릴 수 없으니 먼저 위의 JSON 내보내기로 백업하세요. 관리자 PIN은 유지됩니다.</p>
+      <div class="row"><button class="btn btn-small btn-danger" data-action="reset-all" data-keep="1">선수·팀·기록만 삭제 (대회 설정 유지)</button><button class="btn btn-small btn-danger" data-action="reset-all" data-keep="0">모든 데이터 초기화 (설정 포함)</button></div></div>`;
   }
 
   // ===== 저장 (자동 저장 큐) =====
@@ -891,6 +893,14 @@
       }
       case 'unfinalize': if (!confirm('확정을 해제하면 실시간 집계로 돌아갑니다. 계속할까요?')) return; await run(async () => { await Store.unfinalize(); d.results = null; d.settings.status = 'live'; applyRole(); }, '확정이 해제되었습니다.'); return render();
       case 'export-json': { const json = await run(() => Store.exportAll()); if (json) download(`bowlfesta-backup-${new Date().toISOString().slice(0, 10)}.json`, json, 'application/json'); return; }
+      case 'reset-all': {
+        const keep = el.dataset.keep === '1'; if (!(await guardDirty())) return;
+        const n = state.data.players.length; const t = state.data.teams.length;
+        const typed = prompt(`${keep ? '지역·선수·팀·점수·확정 결과를 모두 삭제하고 대회 설정(이름·조·포인트)은 유지합니다.' : '대회 설정을 포함한 모든 데이터를 초기화합니다.'}\n현재 선수 ${n}명, 팀 ${t}개. 되돌릴 수 없습니다.\n\n계속하려면 "초기화"라고 입력하세요.`);
+        if (typed === null) return; if (typed.trim() !== '초기화') return toast('"초기화"라고 정확히 입력해야 진행됩니다.', true);
+        const ok = await run(() => Store.resetAll(keep), keep ? '선수·팀·기록을 모두 삭제했습니다.' : '모든 데이터를 초기화했습니다.');
+        if (ok) { state.dirtyPlayers = new Map(); state.dirtyTeams = new Map(); state.uploads = []; state.editPlayer = null; state.editRegion = null; await reload(true); applyRole(); state.tab = 'home'; render(); }
+        return; }
       case 'reset-demo': if (confirm('현재 로컬 데이터를 지우고 데모 데이터로 초기화할까요?')) { Store.resetLocal(false); location.reload(); } return;
       case 'reset-empty': if (confirm('모든 지역/선수/팀 데이터를 삭제할까요? (관리자 PIN은 0000으로 초기화)')) { Store.resetLocal(true); location.reload(); } return;
       case 'test-api': await run(async () => { const r = await fetch(Store.getApiUrl() + '?action=ping'); const j = await r.json(); if (!j.ok) throw new Error(j.error || '응답 오류'); }, '서버 연결 정상'); return;

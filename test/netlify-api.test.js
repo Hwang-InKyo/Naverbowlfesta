@@ -74,3 +74,23 @@ test('importAll 은 전체 교체, exportAll 은 공개 뷰', async () => {
   assert.equal(ex.settings.name, '복원'); assert.equal(ex.regions.length, 1); assert.equal(ex.players[0].name, 'a');
   assert.ok((await call('POST', { action: 'login', pin: '0000' })).data.token, '백업의 PIN은 무시');
 });
+
+test('resetAll: 설정 유지/전체, PIN 은 유지', async () => {
+  const { call } = await setup();
+  let { data: { token } } = await call('POST', { action: 'login', pin: '0000' });
+  await call('POST', { action: 'saveSettings', token, settings: { name: '대회', adminPin: '1111', status: 'live' } });
+  ({ data: { token } } = await call('POST', { action: 'login', pin: '1111' }));
+  await call('POST', { action: 'saveRegion', token, region: { name: '청주' } });
+  await call('POST', { action: 'savePlayers', token, players: [{ name: 'a' }] });
+  await call('POST', { action: 'finalize', token, results: { x: 1 } });
+  let r = await call('POST', { action: 'resetAll', token, keepSettings: true });
+  assert.equal(r.data.ok, true);
+  let all = (await call('GET', null, { action: 'getAll' })).data;
+  assert.deepEqual([all.regions, all.players, all.teams, all.results], [[], [], [], null]);
+  assert.equal(all.settings.name, '대회'); assert.equal(all.settings.status, 'ready');
+  ({ data: { token } } = await call('POST', { action: 'login', pin: '1111' })); assert.ok(token, 'PIN 유지');
+  r = await call('POST', { action: 'resetAll', token, keepSettings: false });
+  all = (await call('GET', null, { action: 'getAll' })).data;
+  assert.deepEqual(all.settings, {});
+  assert.ok((await call('POST', { action: 'login', pin: '1111' })).data.token, '전체 초기화 후에도 PIN 유지');
+});

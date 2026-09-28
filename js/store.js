@@ -206,6 +206,16 @@ const Store = (() => {
       }
       await gasPost({ action: 'importAll', data: { settings: d.settings || {}, regions: d.regions, players: d.players, teams: d.teams || [], results: d.results || null } }); return true;
     },
-    resetLocal(empty) { requireAdmin(); if (empty) localSave(emptyData()); else lsDel(LS.data); }
+    resetLocal(empty) { requireAdmin(); if (empty) localSave(emptyData()); else lsDel(LS.data); },
+    /** 전체 초기화 (지역·선수·팀·결과 삭제). keepSettings=true 면 대회 설정은 유지 */
+    async resetAll(keepSettings) {
+      requireAdmin();
+      if (mode() === 'local') {
+        const cur = localLoad();
+        const settings = keepSettings ? { ...cur.settings, status: 'ready' } : { ...Ranking.DEFAULT_SETTINGS, adminPin: cur.settings.adminPin };
+        localSave({ settings, regions: [], players: [], teams: [], results: null }); return true;
+      }
+      await gasPost({ action: 'resetAll', keepSettings: !!keepSettings }); lsDel(LS.cache); return true;
+    }
   };
 })();

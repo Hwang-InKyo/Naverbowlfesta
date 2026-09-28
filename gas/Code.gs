@@ -67,6 +67,7 @@ function doPost(e) {
       case 'unfinalize': return resp(unfinalize(ss));
       case 'exportAll': return resp(getAll(ss));
       case 'importAll': return resp(importAll(ss, body.data || {}));
+      case 'resetAll': return resp(resetAll(ss, !!body.keepSettings));
       default: return resp({ error: 'Unknown action: ' + action });
     }
   } catch (err) { return resp({ error: err.message }); }
@@ -230,6 +231,13 @@ function finalize(ss, results) {
 function unfinalize(ss) {
   deleteRowById(sheetOf(ss, 'results'), 'final');
   saveSettings(ss, { status: 'live' });
+  return { ok: true };
+}
+
+// ===== 전체 초기화 =====
+function resetAll(ss, keepSettings) {
+  clearRows(sheetOf(ss, 'regions')); clearRows(sheetOf(ss, 'players')); clearRows(sheetOf(ss, 'teams')); clearRows(sheetOf(ss, 'results'));
+  if (keepSettings) saveSettings(ss, { status: 'ready' }); else clearRows(sheetOf(ss, 'settings'));
   return { ok: true };
 }
 

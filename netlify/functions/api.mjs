@@ -100,6 +100,7 @@ function apply(d, action, body) {
     case 'unfinalize': return unfinalize(d);
     case 'exportAll': return publicView(d);
     case 'importAll': return importAll(d, body.data || {});
+    case 'resetAll': return resetAll(d, !!body.keepSettings);
     default: throw new Error('Unknown action: ' + action);
   }
 }
@@ -159,6 +160,14 @@ function saveTeams(d, list) {
 function deleteTeam(d, id) { d.teams = d.teams.filter(t => t.id !== id); d.__dirty = true; return d.teams; }
 function finalize(d, results) { d.results = results || {}; d.settings = { ...(d.settings || {}), status: 'final' }; d.__dirty = true; return { ok: true }; }
 function unfinalize(d) { d.results = null; d.settings = { ...(d.settings || {}), status: 'live' }; d.__dirty = true; return { ok: true }; }
+/** 전체 초기화: 지역·선수·팀·결과 삭제. keepSettings 면 대회 설정(이름·조·포인트)은 유지하고 상태만 준비중으로. PIN 은 항상 유지 */
+function resetAll(d, keepSettings) {
+  const pin = d.settings && d.settings.adminPin;
+  d.settings = keepSettings ? { ...(d.settings || {}), status: 'ready' } : {};
+  if (pin) d.settings.adminPin = pin;
+  d.regions = []; d.players = []; d.teams = []; d.results = null;
+  d.__dirty = true; return { ok: true };
+}
 function importAll(d, src) {
   if (src.settings) { const { adminPin, ...rest } = src.settings; d.settings = { ...(d.settings || {}), ...rest }; }
   if (Array.isArray(src.regions)) d.regions = src.regions.map(r => ({ id: r.id || newId('r'), name: r.name || '', leader: r.leader || '', note: r.note || '' }));
