@@ -50,3 +50,19 @@ test('handles a form with three group blocks and empty sections', () => {
   assert.deepEqual(r.reps, ['가나다']);
   assert.deepEqual(r.scotch, []); assert.deepEqual(r.baker, []);
 });
+
+const f45 = require('./fixtures/signup-45.json');
+test('parses the 45th-tournament form: stacked 3조 block, side tables ignored, typo resolved', () => {
+  const r = Signup.parse(f45.rows);
+  assert.equal(r.clubName, '천안 레인보우존');
+  assert.equal(r.players.length, 10, '참가비 표·차량 표의 이름은 세지 않음');
+  const by = Object.fromEntries(r.players.map(p => [p.name, p]));
+  assert.equal(by['이세훈'].group, '1조'); assert.equal(by['이세훈'].side, true); assert.equal(by['이세훈'].champ, true);
+  assert.equal(r.players.filter(p => p.group === '2조').map(p => p.name).join(','), '이형민,기현철,이용철,박미영,이종훈,황선희');
+  assert.equal(r.players.filter(p => p.group === '3조').map(p => p.name).join(','), '강미정,안진환,김영식');
+  assert.equal(by['박미영'].gender, 'F'); assert.equal(by['박미영'].handicap, 15); assert.equal(by['강미정'].handicap, 15);
+  assert.deepEqual(r.reps, ['이형민', '강미정', '김영식']);
+  assert.deepEqual(r.scotch.map(t => t.map(m => m.name)), [['강미정', '김영식'], ['황선희', '이용철'], ['박미영', '이형민']]);
+  assert.deepEqual(r.baker.map(t => t.map(m => m.name)), [['이종훈', '기현철', '안진환']]);
+  assert.equal(r.warnings.length, 1); assert.ok(r.warnings[0].includes('감미정') && r.warnings[0].includes('강미정'));
+});

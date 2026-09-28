@@ -501,9 +501,9 @@
     const existing = d.players.filter(x => x.regionId === region.id);
     const list = p.players.map(x => {
       const ex = existing.find(e => e.name === x.name);
-      const note = x.seniorHandicap ? `시니어핸디 ${x.seniorHandicap}` : '';
+      const note = [x.nickname ? `닉네임 ${x.nickname}` : '', x.champ ? '챔프전' : '', x.seniorHandicap ? `시니어핸디 ${x.seniorHandicap}` : ''].filter(Boolean).join(' · ');
       return { ...(ex || { id: '', birthYear: '', adjust: 0, lane: '', pos: '', games: Array(s.games.individual).fill(null) }), name: x.name, regionId: region.id, gender: x.gender, handicap: x.handicap, group: groupId(x.group), isRep: repSet.has(x.name),
-        events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side }, note: ex && ex.note && !/시니어핸디/.test(ex.note) ? ex.note + (note ? ' ' + note : '') : note };
+        events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side }, note: ex && ex.note && !/시니어핸디|닉네임|챔프전/.test(ex.note) ? [ex.note, note].filter(Boolean).join(' · ') : note };
     });
     d.players = await Store.savePlayers(list);
     if (u.replace !== false) {
