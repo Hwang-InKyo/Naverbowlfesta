@@ -68,25 +68,33 @@ test('parses the 45th-tournament form: stacked 3조 block, side tables ignored, 
 });
 
 const ftpl = require('./fixtures/signup-template.json');
-test('parses the recommended vertical template: 조 column, 3인조 column, 총점가감, horizontal teams, 지역명', () => {
+test('parses the recommended template: 3 group blocks, 챔프전, 지역명, fee block', () => {
   const r = Signup.parse(ftpl.rows);
   assert.equal(r.clubName, '드림존'); assert.equal(r.regionName, '청주');
-  assert.deepEqual(r.players.map(p => [p.name, p.group, p.gender, p.handicap, p.adjust, p.side]), [
-    ['홍길동', '1조', 'M', 0, 0, true], ['김영희', '1조', 'F', 15, 0, false], ['박철수', '2조', 'M', 3, 0, true],
-    ['이순자', '2조', 'F', 20, 0, true], ['최민수', '3조', 'M', 0, -21, false], ['정미라', '3조', 'F', 15, 0, true]]);
+  assert.deepEqual(r.players.map(p => [p.name, p.group, p.gender, p.handicap, p.side, p.champ]), [
+    ['홍길동', '1조', 'M', 0, true, true], ['김영희', '1조', 'F', 15, false, false], ['박철수', '1조', 'M', 3, true, true],
+    ['이순자', '2조', 'F', 20, true, false], ['최민수', '2조', 'M', 0, false, false], ['정미라', '3조', 'F', 15, true, false], ['강동원', '3조', 'M', 0, true, false]]);
   assert.deepEqual(r.reps, ['홍길동', '박철수', '최민수']);
   assert.deepEqual(r.scotch.map(t => t.map(m => m.name)), [['홍길동', '김영희'], ['박철수', '이순자'], ['최민수', '정미라']]);
   assert.deepEqual(r.baker.map(t => t.map(m => m.name)), [['홍길동', '박철수', '최민수'], ['김영희', '이순자', '정미라']]);
+  assert.deepEqual(r.fees, { items: { individual: { unit: 35000, qty: 7, amount: 245000 }, champ: { unit: 10000, qty: 2, amount: 20000 }, side: { unit: 10000, qty: 5, amount: 50000 },
+    club: { unit: 110000, qty: 1, amount: 110000 }, clubDonation: { unit: 50000, qty: 1, amount: 50000 }, personalDonation: { unit: 0, qty: 0, amount: 30000 } }, total: 505000 });
   assert.deepEqual(r.warnings, []);
 });
 
-test('vertical template: numeric 조, missing member, typo resolved', () => {
+test('fee lines are read from the older forms too', () => {
+  const a = Signup.parse(fixture.rows).fees;
+  assert.equal(a.total, 760000); assert.equal(a.items.individual.qty, 14); assert.equal(a.items.individual.amount, 490000); assert.equal(a.items.side.qty, 10); assert.equal(a.items.club.amount, 110000);
+  const b = Signup.parse(f45.rows).fees;
+  assert.equal(b.total, 530000); assert.deepEqual(b.items.individual, { unit: 35000, qty: 10, amount: 350000 }); assert.deepEqual(b.items.champ, { unit: 10000, qty: 1, amount: 10000 });
+  assert.ok(!b.items.side, '헤더의 사이드 옆 순번은 금액이 아님');
+});
+
+test('template: typo in a team is resolved, missing member warned', () => {
   const rows = JSON.parse(JSON.stringify(ftpl.rows));
-  rows[6][1] = 1;                 // 홍길동 조 = 1 → '1조'
-  rows[49][2] = '김영히';          // 스카치 1팀 오타
-  rows[62][3] = null;             // 베이커 1팀 2명만
+  rows[30][1] = '김영히';        // 스카치 1팀 두번째
+  rows[42][1] = null;           // 베이커 1팀 두번째 비움
   const r = Signup.parse(rows);
-  assert.equal(r.players[0].group, '1조');
   assert.deepEqual(r.scotch[0].map(m => m.name), ['홍길동', '김영희']);
   assert.ok(r.warnings.some(w => w.includes('김영히') && w.includes('김영희')));
   assert.ok(r.warnings.some(w => w.includes('3인 팀 인원')));

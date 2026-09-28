@@ -42,6 +42,8 @@ const Store = (() => {
   function localSave(d) { lsSet(LS.data, d); }
   function publicSettings(s) { const { adminPin, ...rest } = s; return rest; }
   function publicView(d) { return { settings: publicSettings(d.settings), regions: clone(d.regions), players: clone(d.players), teams: clone(d.teams), results: d.results ? clone(d.results) : null }; }
+  function defaultFinance() { return { fees: { individual: 35000, champ: 10000, club: 110000, clubDonation: 50000, team5: 0, side: 10000, gameFee: 4500 }, pools: { champ: { basis: 'total', prizes: [50000, 30000, 20000] }, side: { basis: 'total', prizes: [20000, 10000] } }, account: '', cashDonations: [], goodsDonations: [], expenses: [], payments: {} }; }
+  function mergeFinance(f) { const d = defaultFinance(); f = f || {}; const pools = { champ: { ...d.pools.champ, ...((f.pools || {}).champ || {}) }, side: { ...d.pools.side, ...((f.pools || {}).side || {}) } }; return { ...d, ...f, fees: { ...d.fees, ...(f.fees || {}) }, pools, cashDonations: f.cashDonations || [], goodsDonations: f.goodsDonations || [], expenses: f.expenses || [], payments: f.payments || {} }; }
   function upsert(list, item, idPrefix) {
     if (!item.id) item.id = uid(idPrefix);
     const i = list.findIndex(x => x.id === item.id);
@@ -211,6 +213,18 @@ const Store = (() => {
       }
       await gasPost({ action: 'importAll', data: { settings: d.settings || {}, regions: d.regions, players: d.players, teams: d.teams || [], results: d.results || null } }); return true;
     },
+    // ----- 정산 (관리자 전용: 공개 조회 응답에 포함되지 않음) -----
+    defaultFinance, mergeFinance,
+    async loadFinance() {
+      requireAdmin();
+      if (mode() === 'local') return mergeFinance(localLoad().finance);
+      return mergeFinance((await gasPost({ action: 'getFinance' })).finance);
+    },
+    async saveFinance(finance) {
+      requireAdmin();
+      if (mode() === 'local') { const d = localLoad(); d.finance = mergeFinance(finance); localSave(d); return clone(d.finance); }
+      return mergeFinance((await gasPost({ action: 'saveFinance', finance })).finance);
+    },
     resetLocal(empty) { requireAdmin(); if (empty) localSave(emptyData()); else lsDel(LS.data); },
     /** 전체 초기화 (지역·선수·팀·결과 삭제). keepSettings=true 면 대회 설정은 유지 */
     async resetAll(keepSettings) {
@@ -218,7 +232,8 @@ const Store = (() => {
       if (mode() === 'local') {
         const cur = localLoad();
         const settings = keepSettings ? { ...cur.settings, status: 'ready' } : { ...Ranking.DEFAULT_SETTINGS, adminPin: cur.settings.adminPin };
-        localSave({ settings, regions: [], players: [], teams: [], results: null }); return true;
+        const finance = keepSettings ? { ...defaultFinance(), fees: mergeFinance(cur.finance).fees, pools: mergeFinance(cur.finance).pools, account: mergeFinance(cur.finance).account } : defaultFinance();
+        localSave({ settings, regions: [], players: [], teams: [], results: null, finance }); return true;
       }
       await gasPost({ action: 'resetAll', keepSettings: !!keepSettings }); lsDel(LS.cache); return true;
     }

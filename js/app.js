@@ -11,7 +11,7 @@
     playersRegion: '', playersGender: '', playersQ: '', editPlayer: null, editRegion: null,
     assignSub: 'A', indSub: 'M', teamSub: { scotch: 'rank', baker: 'rank' }, scoreGroup: '',
     dirtyPlayers: new Map(), dirtyTeams: new Map(), dirtyTimer: null, openRegion: '', uploads: [], scoreImport: null,
-    previewPublic: false, q: '', searchId: '', pubAssignSub: '', pubAssignQ: '', rankTab: 'individual', rankGender: 'M', rankGroup: '', rankQ: '', pubAssignId: '', recGender: 'all', recGroup: '', recRegion: '', recQ: ''
+    previewPublic: false, q: '', searchId: '', pubAssignSub: '', pubAssignQ: '', rankTab: 'individual', rankGender: 'M', rankGroup: '', rankQ: '', pubAssignId: '', recGender: 'all', recGroup: '', recRegion: '', recQ: '', finance: null, finSub: 'payments'
   };
 
   // ===== 유틸 =====
@@ -45,12 +45,12 @@
   /** 총점에 1회 적용되는 값 표시: 조 보너스 + 개인 가감 */
   const onceText = p => { if (!p) return '-'; const b = Ranking.groupBonus(p.group, S()), a = num(p.adjust); const parts = []; if (b) parts.push('조 +' + b); if (a) parts.push((a > 0 ? '+' : '') + a); return parts.join(' ') || '-'; };
   const PUBLIC_TABS = ['home', 'search', 'assign', 'rank'];
-  const ADMIN_TABS = ['home', 'players', 'assign', 'individual', 'scotch', 'baker', 'standings', 'settings'];
-  const ADMIN_TITLES = { home: '대시보드', players: '선수 관리', assign: '조 편성 · 레인 배정', individual: '개인전 점수 · 집계', scotch: '스카치 더블', baker: '베이커', standings: '지역 종합', settings: '설정' };
+  const ADMIN_TABS = ['home', 'players', 'assign', 'individual', 'scotch', 'baker', 'standings', 'finance', 'settings'];
+  const ADMIN_TITLES = { home: '대시보드', players: '선수 관리', assign: '조 편성 · 레인 배정', individual: '개인전 점수 · 집계', scotch: '스카치 더블', baker: '베이커', standings: '지역 종합', finance: '정산 · 입금 확인', settings: '설정' };
   const STATUS_LABEL = { ready: '준비중', live: '진행중', final: '확정' };
   const dayLabel = () => { const s = S(); const today = new Date().toISOString().slice(0, 10); const i = (s.dates || []).indexOf(today); return i >= 0 ? ' · ' + (i + 1) + '일차' : ''; };
   const fmtDate = d => { if (!d) return ''; const dt = new Date(d + 'T00:00:00'); if (isNaN(dt)) return d; return `${dt.getMonth() + 1}.${dt.getDate()}(${'일월화수목금토'[dt.getDay()]})`; };
-  const evChips = ev => ['individual', 'scotch', 'baker', 'side'].filter(k => ev && ev[k]).map(k => `<span class="ev ${k}">${{ individual: '개인', scotch: '스카치', baker: '베이커', side: '사이드' }[k]}</span>`).join('');
+  const evChips = ev => ['individual', 'scotch', 'baker', 'side', 'champ'].filter(k => ev && ev[k]).map(k => `<span class="ev ${k}">${{ individual: '개인', scotch: '스카치', baker: '베이커', side: '사이드', champ: '챔프' }[k]}</span>`).join('');
   const gamesOf = (r, n) => r.games.slice(0, n).map(g => `<td>${g == null ? '-' : g}</td>`).join('');
   const gameHeads = n => Array.from({ length: n }, (_, i) => `<th>G${i + 1}</th>`).join('');
   const results = () => Ranking.resultsOf(state.data);
@@ -85,7 +85,7 @@
     await reload(true); applyRole(); render();
   }
   async function reload(silent) {
-    const fn = async () => { state.data = await Store.loadAll(); };
+    const fn = async () => { state.data = await Store.loadAll(); state.finance = isAdmin() ? await Store.loadFinance().catch(e => { toast('정산 데이터 로드 실패: ' + e.message, true); return Store.mergeFinance(null); }) : null; };
     if (silent) { try { await fn(); } catch (e) { state.data = { settings: {}, regions: [], players: [], teams: [], results: null }; toast('데이터 로드 실패: ' + e.message, true); } }
     else await run(fn);
   }
@@ -144,6 +144,7 @@
       case 'players': return renderPlayers();
       case 'assign': return renderAssign();
       case 'individual': return renderIndividual();
+      case 'finance': return Finance.render(state);
       case 'scotch': case 'baker': return renderTeamEvent(tab);
       case 'standings': return renderStandings();
       case 'settings': return renderSettings();
@@ -410,6 +411,7 @@
           <label class="checkbox-item"><input type="checkbox" name="ev_scotch" ${ev.scotch ? 'checked' : ''}> 스카치</label>
           <label class="checkbox-item"><input type="checkbox" name="ev_baker" ${ev.baker ? 'checked' : ''}> 베이커</label>
           <label class="checkbox-item"><input type="checkbox" name="ev_side" ${ev.side ? 'checked' : ''}> 사이드</label>
+          <label class="checkbox-item"><input type="checkbox" name="ev_champ" ${ev.champ ? 'checked' : ''}> 챔프전</label>
           <label class="checkbox-item"><input type="checkbox" name="isRep" ${ep && ep.isRep ? 'checked' : ''}> <b>지역 대표</b></label></div></div>
         <div class="form-group"><label>비고</label><input type="text" name="note" value="${esc(ep ? ep.note : '')}"></div>
         <div class="row"><button class="btn btn-small btn-primary" type="submit">저장</button>${ep ? '<button class="btn btn-small btn-outline" type="button" data-action="cancel-player">취소</button>': ''}</div></form></div>`;
@@ -457,6 +459,7 @@
         <p class="small muted">${p.players.map(x => esc(x.name) + (x.handicap ? '(' + x.handicap + ')' : '')).join(', ')}</p>
         ${unknownGroups.length ? `<p class="form-error">신청서의 조 이름 ${unknownGroups.map(esc).join(', ')} 이(가) 설정의 조(${s.groups.map(g => esc(g.name)).join(', ')})와 다릅니다. 순서대로 대응시켜 등록합니다.</p>` : ''}
         ${p.warnings.length ? `<div class="form-error small" style="text-align:left">${p.warnings.map(esc).join('<br>')}</div>` : ''}
+        ${Finance.uploadFeeHtml(p, state.finance)}
         ${u.done ? '' : `<div class="row mt"><label class="checkbox-item"><input type="checkbox" data-upload-replace="${i}" ${u.replace !== false ? 'checked' : ''}> 이 클럽의 기존 선수·팀을 신청서 기준으로 교체</label><button class="btn btn-small btn-primary" data-action="signup-register" data-i="${i}">등록</button></div>`}
       </div>`;
     });
@@ -490,6 +493,11 @@
     const d = state.data; const s = S(); const p = u.parsed;
     const regionName = (u.regionName || '').trim();
     if (!regionName) return toast(`${u.fileName}: 지역명을 입력하세요 (클럽명 ${p.clubName || '-'} → 예: 청주)`, true);
+    const feeCheck = Finance.checkSignupFees(p, state.finance);
+    if (feeCheck.issues.length && !u.feeConfirmed) {
+      if (!confirm(`${regionName}: 신청서 참가비 내역이 명단과 맞지 않습니다.\n\n- ${feeCheck.issues.join('\n- ')}\n\n그래도 등록할까요? (입금 확인 탭에서 다시 볼 수 있습니다)`)) return;
+      u.feeConfirmed = true;
+    }
     let region = d.regions.find(r => r.name === regionName);
     const clubNote = p.clubName && p.clubName !== regionName ? `클럽: ${p.clubName}` : '';
     if (!region) { region = { id: Store.uid('r'), name: regionName, leader: '', note: clubNote }; d.regions = await Store.saveRegion(region); region = d.regions.find(r => r.name === regionName) || region; }
@@ -504,7 +512,7 @@
       const ex = existing.find(e => e.name === x.name);
       const note = [x.nickname ? `닉네임 ${x.nickname}` : '', x.champ ? '챔프전' : '', x.seniorHandicap ? `시니어핸디 ${x.seniorHandicap}` : ''].filter(Boolean).join(' · ');
       return { ...(ex || { id: '', birthYear: '', adjust: 0, lane: '', pos: '', games: Array(s.games.individual).fill(null) }), name: x.name, regionId: region.id, gender: x.gender, handicap: x.handicap, adjust: num(x.adjust) || (ex ? ex.adjust : 0) || 0, group: groupId(x.group), isRep: repSet.has(x.name),
-        events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side }, note: ex && ex.note && !/시니어핸디|닉네임|챔프전/.test(ex.note) ? [ex.note, note].filter(Boolean).join(' · ') : note };
+        events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side, champ: !!x.champ }, note: ex && ex.note && !/시니어핸디|닉네임|챔프전/.test(ex.note) ? [ex.note, note].filter(Boolean).join(' · ') : note };
     });
     d.players = await Store.savePlayers(list);
     if (u.replace !== false) {
@@ -516,6 +524,11 @@
     const mk = (ev, teams) => teams.map((t, i) => ({ event: ev, regionId: region.id, name: `${regionName}${i + 1}`, members: t.map(m => idOf(m.name)).filter(Boolean), lane: '', handicap: ev === 'baker' ? (t.filter(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F').length >= 2 ? 5 : t.some(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F') ? 3 : 0) : 0, adjust: 0, games: Array(s.games[ev]).fill(null) }));
     if (u.replace !== false || p.scotch.length) d.teams = await Store.replaceTeams(region.id, 'scotch', mk('scotch', p.scotch));
     if (u.replace !== false || p.baker.length) d.teams = await Store.replaceTeams(region.id, 'baker', mk('baker', p.baker));
+    if (state.finance) {
+      const prev = state.finance.payments[region.id] || {};
+      state.finance.payments[region.id] = { ...prev, form: p.fees || null, formCounts: feeCheck.counts, formIssues: feeCheck.issues, formAt: new Date().toISOString() };
+      try { state.finance = await Store.saveFinance(state.finance); } catch (e) { toast('신청서 금액 저장 실패: ' + e.message, true); }
+    }
     u.done = true;
     return `${regionName}${p.clubName && p.clubName !== regionName ? `(${p.clubName})` : ''}: 선수 ${list.length}명, 스카치 ${p.scotch.length}팀, 베이커 ${p.baker.length}팀 등록`;
   }
@@ -859,6 +872,8 @@
         const upd = list.map(p => ({ ...p, lane: a2[p.id].lane, pos: a2[p.id].pos }));
         await run(async () => { d.players = await Store.savePlayers(upd); await Store.saveSettings({ tableFrom: from, perTable: per }); d.settings.tableFrom = from; d.settings.perTable = per; }, `${tables[0]}~${tables[tables.length - 1]}번 테이블(${tableLanes(tables[0]).split('·')[0]}~${2 * tables[tables.length - 1]}레인)에 배정했습니다.`); return render();
       }
+      case 'fin-sub': state.finSub = el.dataset.sub; return render();
+      case 'fin-action': { const r = await Finance.onAction(el, state, { run, toast, confirm: m => confirm(m), save: f => Store.saveFinance(f) }); if (r !== false) render(); return; }
       case 'rename-teams': {
         const event = el.dataset.event; if (!(await guardDirty())) return;
         if (!confirm(`${EV[event].name} 모든 팀 이름을 지역명+번호(예: 청주1, 청주2)로 다시 붙일까요?`)) return;
@@ -917,10 +932,13 @@
     const nums = k => v(k).split(',').map(x => num(x.trim())).filter(x => x > 0);
     switch (f.dataset.form) {
       case 'save-region': { const r = await run(async () => { d.regions = await Store.saveRegion({ id: f.dataset.id || '', name: v('name'), leader: v('leader'), note: v('note') }); return true; }, '저장되었습니다.'); if (r) { state.editRegion = null; render(); } return; }
+      case 'fin-fees': { const r = await Finance.onFeesSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
+      case 'fin-pools': { const r = await Finance.onPoolsSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
+      case 'fin-line': { const r = await Finance.onLineSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
       case 'save-player': {
         if (!v('regionId')) return toast('지역을 선택하세요.', true);
         const ex = f.dataset.id ? playerById(f.dataset.id) : null;
-        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), side: chk('ev_side') } };
+        const p = { ...(ex || { games: Array(s.games.individual).fill(null), lane: '', pos: '' }), id: f.dataset.id || '', name: v('name'), regionId: v('regionId'), gender: v('gender'), birthYear: v('birthYear') ? num(v('birthYear')) : '', handicap: num(v('handicap')), adjust: num(v('adjust')), group: v('group'), isRep: chk('isRep'), note: v('note'), events: { individual: chk('ev_individual'), scotch: chk('ev_scotch'), baker: chk('ev_baker'), side: chk('ev_side'), champ: chk('ev_champ') } };
         if (d.players.some(x => x.id !== p.id && x.regionId === p.regionId && x.name === p.name)) return toast('같은 지역에 동명 선수가 있습니다.', true);
         const r = await run(async () => { d.players = await Store.savePlayers([p]); return true; }, '저장되었습니다.'); if (r) { state.editPlayer = null; render(); } return;
       }
@@ -973,10 +991,12 @@
     }
   }
 
-  function onChange(e) {
+  async function onChange(e) {
     const el = e.target; const k = el.dataset.change; const d = state.data; const s = S();
     if (k === 'rank-group') { state.rankGroup = el.value; return render(); }
     if (k === 'rec-group') { state.recGroup = el.value; return render(); }
+    if (k === 'fin-side-group') { state.finSideGroup = el.value; return render(); }
+    if (k === 'fin-pay') { await Finance.onPaymentChange(el, state, { run, toast, save: f => Store.saveFinance(f) }); return; }
     if (k === 'rec-region') { state.recRegion = el.value; return render(); }
     if (k === 'players-region') { state.playersRegion = el.value; return render(); }
     if (k === 'players-gender') { state.playersGender = el.value; return render(); }

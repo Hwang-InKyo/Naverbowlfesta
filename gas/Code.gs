@@ -68,6 +68,8 @@ function doPost(e) {
       case 'exportAll': return resp(getAll(ss));
       case 'importAll': return resp(importAll(ss, body.data || {}));
       case 'resetAll': return resp(resetAll(ss, !!body.keepSettings));
+      case 'getFinance': return resp({ finance: getFinance(ss) });
+      case 'saveFinance': return resp({ finance: saveFinance(ss, body.finance) });
       default: return resp({ error: 'Unknown action: ' + action });
     }
   } catch (err) { return resp({ error: err.message }); }
@@ -233,6 +235,10 @@ function unfinalize(ss) {
   saveSettings(ss, { status: 'live' });
   return { ok: true };
 }
+
+// ===== 정산 (관리자 전용, '결과' 시트의 'finance' 키에 JSON) =====
+function getFinance(ss) { const sheet = sheetOf(ss, 'results'); const idx = findRow(sheet, 'finance'); return idx > 0 ? parseJson(sheet.getRange(idx, 2).getValue(), null) : null; }
+function saveFinance(ss, f) { upsertRow(sheetOf(ss, 'results'), 'finance', ['finance', JSON.stringify(f || {})]); return f || null; }
 
 // ===== 전체 초기화 =====
 function resetAll(ss, keepSettings) {

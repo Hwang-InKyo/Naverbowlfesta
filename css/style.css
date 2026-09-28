@@ -357,3 +357,26 @@ body.is-public .tbl th, body.is-public .tbl td { padding: 8px 5px; }
 #rec-table th:nth-child(2), #rec-table td:nth-child(2) { position: sticky; left: 44px; background: var(--card, #fff); z-index: 1; box-shadow: 4px 0 6px -4px rgba(0,0,0,.12); }
 #rec-table thead th:nth-child(1), #rec-table thead th:nth-child(2) { z-index: 2; }
 #rec-table tr.me td:nth-child(1), #rec-table tr.me td:nth-child(2) { background: var(--orange-tint); }
+
+/* ===== 정산 · 입금 확인 ===== */
+.fee-check { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; background: var(--paper); border: 1px solid var(--line); }
+.fee-check.bad { border-color: #E5A6A6; background: #FFF4F4; }
+.tbl td.right { text-align: right; } .tbl td.neg { color: #C62828; font-weight: 700; } .tbl td .ok { color: #2E7D32; font-weight: 700; }
+.tbl tr.paid td { background: #EEF7EE; }
+.statement { background: #fff; color: #111; padding: 20px; border: 1px solid var(--line); border-radius: 12px; max-width: 900px; font-family: 'Noto Sans KR', sans-serif; }
+.statement h1 { font-size: 22px; text-align: center; margin: 0 0 18px; font-family: 'Noto Sans KR', sans-serif; font-weight: 900; }
+.stmt { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 13px; }
+.stmt th, .stmt td { border: 1px solid #999; padding: 5px 8px; text-align: center; }
+.stmt th { background: #F0F0F0; font-weight: 700; }
+.stmt th.sec { color: #fff; font-size: 14px; letter-spacing: 4px; padding: 7px; }
+.stmt th.sec.income { background: #5B9BD5; } .stmt th.sec.expense { background: #C00000; } .stmt th.sec.sub-expense { background: #ED7D31; letter-spacing: 1px; } .stmt th.sec.total { background: #8497B0; }
+.stmt td.num { text-align: right; font-variant-numeric: tabular-nums; } .stmt td.blue { color: #0000FF; } .stmt td.red { color: #C00000; }
+.stmt tr.sub td { background: #FFFF00; font-weight: 900; text-align: right; }
+.stmt.final td { font-weight: 700; } .stmt.final td.bal { background: #00B050; color: #fff; font-weight: 900; } .stmt.final td.neg { background: #C00000; color: #fff; }
+@media print {
+  .statement { border: none; padding: 0; max-width: none; }
+  .stmt th.sec, .stmt tr.sub td, .stmt.final td.bal { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #tab-finance .card { display: none; }
+}
+.side-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.side-grid h3 { margin: 0 0 6px; font-size: 13px; color: var(--text-3); }

@@ -30,9 +30,9 @@
   const groupLabel = v => { const s = str(v).replace(/\s+/g, ''); return /^\d+조$/.test(s) ? s : ''; };
   const distance = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]); for (let j = 1; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; };
 
-  /** 라벨 검색: 특정 열 범위에서 키워드가 있는 첫 행 */
+  /** 라벨 검색: 특정 열 범위에서 키워드가 있는 첫 행. 긴 안내문(예: "3인조·스카치 이름은 …")은 라벨로 보지 않는다 */
   function findRow(rows, kw, from = 0, cols = 4) {
-    for (let r = from; r < rows.length; r++) for (let c = 0; c < Math.min(cols, (rows[r] || []).length); c++) if (has(cell(rows, r, c), kw)) return r;
+    for (let r = from; r < rows.length; r++) for (let c = 0; c < Math.min(cols, (rows[r] || []).length); c++) { const v = str(cell(rows, r, c)); if (v.length <= 24 && has(v, kw)) return r; }
     return -1;
   }
   /** 헤더 행에서 블록의 열 위치를 읽는다. nameCol 부터 오른쪽으로, 빈 헤더 칸이나 limit 전까지 */
@@ -54,7 +54,7 @@
 
   function parse(rows) {
     rows = Array.from(rows || [], r => Array.isArray(r) ? r : []);
-    const out = { clubName: '', regionName: '', players: [], reps: [], scotch: [], baker: [], warnings: [] };
+    const out = { clubName: '', regionName: '', players: [], reps: [], scotch: [], baker: [], fees: null, warnings: [] };
     if (!rows.length) { out.warnings.push('빈 시트입니다.'); return out; }
 
     // 클럽명 / 지역명: 라벨 오른쪽의 첫 값
@@ -68,6 +68,8 @@
     }
     if (!out.clubName && !out.regionName) out.warnings.push('클럽명을 찾지 못했습니다.');
     if (!out.clubName) out.clubName = out.regionName;
+
+    out.fees = parseFees(rows);
 
     // 세로형 양식(docs/signup-template.xlsx): 헤더 행에 '조' 열이 있으면 한 행 = 선수 한 명
     const vertical = parseVertical(rows, out);
@@ -209,6 +211,36 @@
     if (bakerRow >= 0) out.baker = teamRows(bakerRow, rows.length, 3);
     validate(out);
     return out;
+  }
+
+  /** 참가비 내역: 시트 어디에 있든 '개인전/챔프전/클럽비/5인조/찬조/총금액' 라벨과 그 오른쪽(또는 같은 칸 ':' 뒤)의 숫자를 읽는다.
+   *  결과 { items: { individual|champ|club|team5|clubDonation|personalDonation: { unit, qty, amount } }, total } (아무것도 없으면 null) */
+  const FEE_KEYS = [
+    ['personalDonation', /개인찬조/], ['clubDonation', /찬조/], ['individual', /^개인전|개인참가비|^참가비$/], ['champ', /챔프/],
+    ['club', /클럽참가비|클럽비|^클럽$/], ['team5', /5인조/], ['side', /사이드/], ['total', /총금액|총합계|합계/]
+  ];
+  function parseFees(rows) {
+    const items = {}; let total = null;
+    const numbersRight = (r, c) => { const out = []; for (let k = c + 1; k < Math.min(rows[r].length, c + 6); k++) { const v = str(rows[r][k]); if (!v || v === ':') continue; const n = Number(v.replace(/[^\d.-]/g, '')); if (v.replace(/[^\d.,\-원]/g, '') === v && Number.isFinite(n)) out.push(n); else break; } return out; };
+    for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++) {
+      const raw = str(rows[r][c]); if (!raw || /^\d/.test(raw)) continue;
+      const label = raw.replace(/^[*\s]+/, '').split(/[:：]/)[0].replace(/\(.*?\)/g, '').replace(/\s+/g, '');
+      if (!label || label.length > 8 || /인원|내역|계좌|신청/.test(label)) continue;
+      const key = (FEE_KEYS.find(([, re]) => re.test(label)) || [])[0]; if (!key) continue;
+      let unit = 0, qty = 0, amount = null;
+      const inCell = raw.includes(':') ? Number((raw.split(/[:：]/)[1] || '').replace(/[^\d.-]/g, '')) : NaN;
+      const paren = raw.match(/\(\s*(\d+)\s*[명팀]?\s*\)/); if (paren) qty = Number(paren[1]);
+      if (Number.isFinite(inCell) && (raw.split(/[:：]/)[1] || '').replace(/[^\d]/g, '')) amount = inCell;
+      else { const ns = numbersRight(r, c); if (ns.length >= 3) { unit = ns[0]; qty = ns[1]; amount = ns[2]; } else if (ns.length) amount = ns[ns.length - 1]; }
+      if (amount == null) continue;
+      // 표 헤더의 '사이드'·'챔프비' 옆에 있는 순번 같은 작은 숫자는 금액이 아니다. 금액은 1,000원 이상이거나 '* 항목 : 0' 형태만 인정
+      if (amount !== 0 && amount < 1000) continue;
+      if (amount === 0 && !raw.includes(':')) continue;
+      if (key === 'total') { if (total == null || amount > total) total = amount; continue; }
+      if (!items[key]) items[key] = { unit, qty, amount };
+    }
+    if (!Object.keys(items).length && total == null) return null;
+    return { items, total };
   }
 
   /** 검증: 팀원/대표가 개인전 명단에 있는지 (오타면 비슷한 이름으로 처리/제안), 스카치 남녀 구성 */

@@ -51,7 +51,7 @@ async function load() {
   const raw = await store().get(KEY);
   if (!raw) return emptyData();
   const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  return { settings: d.settings || {}, regions: d.regions || [], players: d.players || [], teams: d.teams || [], results: d.results || null };
+  return { settings: d.settings || {}, regions: d.regions || [], players: d.players || [], teams: d.teams || [], results: d.results || null, finance: d.finance || null };
 }
 async function save(d) { await store().set(KEY, JSON.stringify(d)); }
 function publicView(d) { const { adminPin, ...settings } = d.settings || {}; return { settings, regions: d.regions, players: d.players, teams: d.teams, results: d.results }; }
@@ -98,8 +98,10 @@ function apply(d, action, body) {
     case 'deleteTeam': return { teams: deleteTeam(d, body.id) };
     case 'finalize': return finalize(d, body.results);
     case 'unfinalize': return unfinalize(d);
-    case 'exportAll': return publicView(d);
+    case 'exportAll': return { ...publicView(d), finance: d.finance || null };
     case 'importAll': return importAll(d, body.data || {});
+    case 'getFinance': return { finance: d.finance || null };
+    case 'saveFinance': d.finance = body.finance && typeof body.finance === 'object' ? body.finance : null; d.__dirty = true; return { finance: d.finance };
     case 'resetAll': return resetAll(d, !!body.keepSettings);
     default: throw new Error('Unknown action: ' + action);
   }
@@ -166,9 +168,12 @@ function resetAll(d, keepSettings) {
   d.settings = keepSettings ? { ...(d.settings || {}), status: 'ready' } : {};
   if (pin) d.settings.adminPin = pin;
   d.regions = []; d.players = []; d.teams = []; d.results = null;
+  const f = d.finance || {};
+  d.finance = keepSettings ? { fees: f.fees || {}, pools: f.pools || {}, account: f.account || '', cashDonations: [], goodsDonations: [], expenses: [], payments: {} } : null;
   d.__dirty = true; return { ok: true };
 }
 function importAll(d, src) {
+  if (src.finance && typeof src.finance === 'object') d.finance = src.finance;
   if (src.settings) { const { adminPin, ...rest } = src.settings; d.settings = { ...(d.settings || {}), ...rest }; }
   if (Array.isArray(src.regions)) d.regions = src.regions.map(r => ({ id: r.id || newId('r'), name: r.name || '', leader: r.leader || '', note: r.note || '' }));
   if (Array.isArray(src.players)) d.players = src.players.map(p => normPlayer({ ...p, id: p.id || newId('p') }));
