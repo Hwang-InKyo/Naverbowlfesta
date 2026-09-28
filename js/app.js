@@ -442,7 +442,8 @@
     const ups = state.uploads;
     let html = `<div class="card"><h2>참가 신청서 업로드 (엑셀)</h2>
       <p class="muted small mb">클럽별 참가 신청서(.xlsx)를 선택하면 클럽명, 개인전 선수(조·성별·핸디·사이드), 3인조 대표, 스카치·베이커 팀을 읽어 미리보기를 보여줍니다. 여러 파일을 한 번에 선택할 수 있습니다.</p>
-      <label class="btn btn-small btn-primary" style="cursor:pointer">파일 선택 <input type="file" accept=".xlsx,.xls" multiple data-change="signup-files" style="display:none"></label>`;
+      <div class="row"><label class="btn btn-small btn-primary" style="cursor:pointer">파일 선택 <input type="file" accept=".xlsx,.xls" multiple data-change="signup-files" style="display:none"></label><a class="btn btn-small btn-outline" href="docs/signup-template.xlsx" download="참가신청서_양식.xlsx">신청서 양식 내려받기</a></div>
+      <p class="muted small mt">권장 양식: 한 줄에 선수 한 명(조·성명·성별·핸디·시니어핸디·총점가감·사이드·3인조), 스카치·베이커는 한 줄에 한 팀. 이전 대회 양식(45회·46회)도 읽을 수 있습니다.</p>`;
     if (typeof XLSX === 'undefined') html += `<p class="form-error mt">엑셀 읽기 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.</p>`;
     ups.forEach((u, i) => {
       const p = u.parsed;
@@ -475,7 +476,7 @@
         u.parsed = Signup.parse(rows);
         const club = (u.parsed.clubName || '').trim();
         const known = club ? state.data.regions.find(r => r.name === club || (r.note || '').includes(club)) : null;
-        u.regionName = known ? known.name : '';
+        u.regionName = (u.parsed.regionName || '').trim() || (known ? known.name : '');
         if (!u.parsed.players.length) { u.error = '선수를 찾지 못했습니다. 양식을 확인하세요.'; u.parsed = null; }
       } catch (e) { u.error = '읽기 실패: ' + e.message; }
       state.uploads.push(u);
@@ -502,7 +503,7 @@
     const list = p.players.map(x => {
       const ex = existing.find(e => e.name === x.name);
       const note = [x.nickname ? `닉네임 ${x.nickname}` : '', x.champ ? '챔프전' : '', x.seniorHandicap ? `시니어핸디 ${x.seniorHandicap}` : ''].filter(Boolean).join(' · ');
-      return { ...(ex || { id: '', birthYear: '', adjust: 0, lane: '', pos: '', games: Array(s.games.individual).fill(null) }), name: x.name, regionId: region.id, gender: x.gender, handicap: x.handicap, group: groupId(x.group), isRep: repSet.has(x.name),
+      return { ...(ex || { id: '', birthYear: '', adjust: 0, lane: '', pos: '', games: Array(s.games.individual).fill(null) }), name: x.name, regionId: region.id, gender: x.gender, handicap: x.handicap, adjust: num(x.adjust) || (ex ? ex.adjust : 0) || 0, group: groupId(x.group), isRep: repSet.has(x.name),
         events: { individual: true, scotch: inScotch.has(x.name), baker: inBaker.has(x.name), side: !!x.side }, note: ex && ex.note && !/시니어핸디|닉네임|챔프전/.test(ex.note) ? [ex.note, note].filter(Boolean).join(' · ') : note };
     });
     d.players = await Store.savePlayers(list);

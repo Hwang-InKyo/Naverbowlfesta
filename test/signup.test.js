@@ -66,3 +66,28 @@ test('parses the 45th-tournament form: stacked 3조 block, side tables ignored, 
   assert.deepEqual(r.baker.map(t => t.map(m => m.name)), [['이종훈', '기현철', '안진환']]);
   assert.equal(r.warnings.length, 1); assert.ok(r.warnings[0].includes('감미정') && r.warnings[0].includes('강미정'));
 });
+
+const ftpl = require('./fixtures/signup-template.json');
+test('parses the recommended vertical template: 조 column, 3인조 column, 총점가감, horizontal teams, 지역명', () => {
+  const r = Signup.parse(ftpl.rows);
+  assert.equal(r.clubName, '드림존'); assert.equal(r.regionName, '청주');
+  assert.deepEqual(r.players.map(p => [p.name, p.group, p.gender, p.handicap, p.adjust, p.side]), [
+    ['홍길동', '1조', 'M', 0, 0, true], ['김영희', '1조', 'F', 15, 0, false], ['박철수', '2조', 'M', 3, 0, true],
+    ['이순자', '2조', 'F', 20, 0, true], ['최민수', '3조', 'M', 0, -21, false], ['정미라', '3조', 'F', 15, 0, true]]);
+  assert.deepEqual(r.reps, ['홍길동', '박철수', '최민수']);
+  assert.deepEqual(r.scotch.map(t => t.map(m => m.name)), [['홍길동', '김영희'], ['박철수', '이순자'], ['최민수', '정미라']]);
+  assert.deepEqual(r.baker.map(t => t.map(m => m.name)), [['홍길동', '박철수', '최민수'], ['김영희', '이순자', '정미라']]);
+  assert.deepEqual(r.warnings, []);
+});
+
+test('vertical template: numeric 조, missing member, typo resolved', () => {
+  const rows = JSON.parse(JSON.stringify(ftpl.rows));
+  rows[6][1] = 1;                 // 홍길동 조 = 1 → '1조'
+  rows[49][2] = '김영히';          // 스카치 1팀 오타
+  rows[62][3] = null;             // 베이커 1팀 2명만
+  const r = Signup.parse(rows);
+  assert.equal(r.players[0].group, '1조');
+  assert.deepEqual(r.scotch[0].map(m => m.name), ['홍길동', '김영희']);
+  assert.ok(r.warnings.some(w => w.includes('김영히') && w.includes('김영희')));
+  assert.ok(r.warnings.some(w => w.includes('3인 팀 인원')));
+});

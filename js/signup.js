@@ -37,7 +37,7 @@
   }
   /** 헤더 행에서 블록의 열 위치를 읽는다. nameCol 부터 오른쪽으로, 빈 헤더 칸이나 limit 전까지 */
   function readHeader(hdr, nameCol, limit) {
-    const b = { nameCol, numCol: nameCol - 1, genderCol: -1, handiCol: -1, seniorCol: -1, sideCol: -1, champCol: -1, nickCol: -1 };
+    const b = { nameCol, numCol: nameCol - 1, genderCol: -1, handiCol: -1, seniorCol: -1, sideCol: -1, champCol: -1, nickCol: -1, adjustCol: -1, groupCol: -1, repCol: -1 };
     for (let c = nameCol + 1; c < Math.min(hdr.length, limit); c++) {
       const v = str(hdr[c]); if (!v) break;
       if (has(v, '성별')) b.genderCol = c;
@@ -46,24 +46,32 @@
       else if (has(v, '사이드')) b.sideCol = c;
       else if (has(v, '챔프')) b.champCol = c;
       else if (has(v, '닉네임')) b.nickCol = c;
+      else if (has(v, '가감')) b.adjustCol = c;
+      else if (has(v, '3인조') || has(v, '대표')) b.repCol = c;
     }
     return b;
   }
 
   function parse(rows) {
     rows = Array.from(rows || [], r => Array.isArray(r) ? r : []);
-    const out = { clubName: '', players: [], reps: [], scotch: [], baker: [], warnings: [] };
+    const out = { clubName: '', regionName: '', players: [], reps: [], scotch: [], baker: [], warnings: [] };
     if (!rows.length) { out.warnings.push('빈 시트입니다.'); return out; }
 
-    // 클럽명
-    outer: for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    // 클럽명 / 지역명: 라벨 오른쪽의 첫 값
+    const labelValue = (r, c) => { for (let k = c + 1; k < Math.min(rows[r].length, c + 4); k++) { const v = str(cell(rows, r, k)); if (v) return v; } return ''; };
+    for (let r = 0; r < Math.min(rows.length, 15); r++) {
       for (let c = 0; c < rows[r].length; c++) {
-        if (has(cell(rows, r, c), '클럽명') || has(cell(rows, r, c), '지역명')) {
-          for (let k = c + 1; k < rows[r].length; k++) { const v = str(cell(rows, r, k)); if (v) { out.clubName = v; break outer; } }
-        }
+        const v = str(cell(rows, r, c)).replace(/\s+/g, '');
+        if (v === '클럽명' && !out.clubName) out.clubName = labelValue(r, c);
+        else if (v === '지역명' && !out.regionName) out.regionName = labelValue(r, c);
       }
     }
-    if (!out.clubName) out.warnings.push('클럽명을 찾지 못했습니다.');
+    if (!out.clubName && !out.regionName) out.warnings.push('클럽명을 찾지 못했습니다.');
+    if (!out.clubName) out.clubName = out.regionName;
+
+    // 세로형 양식(docs/signup-template.xlsx): 헤더 행에 '조' 열이 있으면 한 행 = 선수 한 명
+    const vertical = parseVertical(rows, out);
+    if (vertical) return vertical;
 
     // 섹션 경계 (왼쪽 4열 안의 라벨)
     const repsRow = findRow(rows, '3인조');
@@ -122,6 +130,7 @@
         if (!gender) out.warnings.push(`"${name}" 성별이 비어 있어 남자로 처리합니다.`);
         out.players.push({ name, gender: gender || 'M', handicap: base + senior, baseHandicap: base, seniorHandicap: senior,
           side: b.sideCol >= 0 ? yes(cell(rows, r, b.sideCol)) : false, champ: b.champCol >= 0 ? yes(cell(rows, r, b.champCol)) : false,
+          adjust: b.adjustCol >= 0 ? num(cell(rows, r, b.adjustCol)) : 0,
           nickname: b.nickCol >= 0 ? str(cell(rows, r, b.nickCol)) : '', group: b.group });
       }
     });
@@ -148,7 +157,62 @@
     if (scotchRow >= 0) { const to = [bakerRow, endRow].filter(x => x > scotchRow).reduce((a, b) => Math.min(a, b), rows.length); out.scotch = sectionTeams(scotchRow, to, 2); }
     if (bakerRow >= 0) out.baker = sectionTeams(bakerRow, endRow, 3);
 
-    // 검증: 팀원/대표가 개인전 명단에 있는지 (오타면 비슷한 이름 제안), 스카치 남녀 구성
+    validate(out);
+    return out;
+  }
+
+  /** 세로형: 헤더(순번|조|성명|성별|핸디|시니어핸디|총점가감|사이드|3인조|비고) 아래 한 행에 선수 한 명.
+   *  스카치/베이커는 '팀 | 선수1 | 선수2 (| 선수3)' 헤더 아래 한 행에 한 팀. 해당 양식이 아니면 null */
+  function parseVertical(rows, out) {
+    let hdrRow = -1, b = null;
+    for (let r = 0; r < Math.min(rows.length, 20) && !b; r++) {
+      const nameCol = rows[r].findIndex(v => has(v, '성명') || has(v, '이름'));
+      if (nameCol < 0) continue;
+      const cand = readHeader(rows[r], nameCol, Infinity);
+      // '조' 열은 성명 바로 왼쪽(3칸 이내)에 있어야 세로형으로 본다 (참가비 표의 '성명|조'는 오른쪽에 있으므로 제외)
+      for (let c = Math.max(0, nameCol - 3); c < nameCol; c++) if (str(rows[r][c]).replace(/\s+/g, '') === '조') cand.groupCol = c;
+      if (cand.groupCol >= 0) { hdrRow = r; b = cand; }
+    }
+    if (!b) return null;
+    const scotchRow = findRow(rows, '스카치', hdrRow + 1), bakerRow = findRow(rows, '베이커', hdrRow + 1);
+    const endRow = [scotchRow, bakerRow].filter(x => x >= 0).reduce((a, c) => Math.min(a, c), rows.length);
+    const seen = new Set();
+    for (let r = hdrRow + 1; r < endRow; r++) {
+      const name = str(cell(rows, r, b.nameCol)); if (!isName(name)) continue;
+      if (seen.has(name)) { out.warnings.push(`개인전 명단에 "${name}" 이(가) 중복됩니다.`); continue; }
+      seen.add(name);
+      let group = str(cell(rows, r, b.groupCol)).replace(/\s+/g, ''); if (/^\d+$/.test(group)) group += '조';
+      if (!group) out.warnings.push(`"${name}" 조가 비어 있습니다.`);
+      const gender = genderOf(cell(rows, r, b.genderCol)); if (!gender) out.warnings.push(`"${name}" 성별이 비어 있어 남자로 처리합니다.`);
+      const base = b.handiCol >= 0 ? num(cell(rows, r, b.handiCol)) : 0, senior = b.seniorCol >= 0 ? num(cell(rows, r, b.seniorCol)) : 0;
+      out.players.push({ name, gender: gender || 'M', handicap: base + senior, baseHandicap: base, seniorHandicap: senior,
+        side: b.sideCol >= 0 ? yes(cell(rows, r, b.sideCol)) : false, champ: b.champCol >= 0 ? yes(cell(rows, r, b.champCol)) : false,
+        adjust: b.adjustCol >= 0 ? num(cell(rows, r, b.adjustCol)) : 0, nickname: b.nickCol >= 0 ? str(cell(rows, r, b.nickCol)) : '', group });
+      if (b.repCol >= 0 && yes(cell(rows, r, b.repCol))) out.reps.push(name);
+    }
+    if (!out.players.length) out.warnings.push('개인전 선수를 찾지 못했습니다.');
+    // 팀: 섹션 라벨 다음의 '선수1' 헤더 행에서 열 위치를 읽고, 이름이 하나라도 있는 행이 한 팀
+    const teamRows = (from, to, size) => {
+      const teams = []; if (from < 0) return teams;
+      let cols = [];
+      for (let r = from; r < Math.min(to, from + 3) && !cols.length; r++) rows[r].forEach((v, c) => { if (/^선수\s*\d+$/.test(str(v))) cols.push({ c, r }); });
+      if (!cols.length) return teams;
+      for (let r = cols[0].r + 1; r < to; r++) {
+        const members = cols.map(x => str(cell(rows, r, x.c))).filter(isName).map(name => ({ name, gender: '' }));
+        if (!members.length) continue;
+        if (size && members.length !== size) out.warnings.push(`${size}인 팀 인원이 맞지 않습니다: ${members.map(m => m.name).join(', ')}`);
+        teams.push(members);
+      }
+      return teams;
+    };
+    if (scotchRow >= 0) out.scotch = teamRows(scotchRow, bakerRow > scotchRow ? bakerRow : rows.length, 2);
+    if (bakerRow >= 0) out.baker = teamRows(bakerRow, rows.length, 3);
+    validate(out);
+    return out;
+  }
+
+  /** 검증: 팀원/대표가 개인전 명단에 있는지 (오타면 비슷한 이름으로 처리/제안), 스카치 남녀 구성 */
+  function validate(out) {
     const names = new Set(out.players.map(p => p.name));
     const gMap = new Map(out.players.map(p => [p.name, p.gender]));
     // 명단에 없는 이름: 한 글자만 다른 이름이 정확히 하나면 오타로 보고 그 이름으로 처리(경고 표시), 아니면 경고만
@@ -166,7 +230,6 @@
       if (t.length === 2 && gs !== 'FM') out.warnings.push(`스카치 팀 (${t.map(m => m.name).join(', ')}) 은 남 1명 + 여 1명이어야 합니다.`);
     });
     out.baker.forEach(t => t.forEach(m => { m.name = resolve('베이커', m.name); }));
-    return out;
   }
 
   return { parse };
