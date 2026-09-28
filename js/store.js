@@ -9,7 +9,7 @@
  */
 const Store = (() => {
   const DEFAULT_API_URL = ''; // 배포 시 Apps Script 웹앱 URL을 넣으면 설정 없이 서버 모드
-  const LS = { data: 'bf_data_v1', api: 'bf_api_url', auth: 'bf_auth_v1' };
+  const LS = { data: 'bf_data_v1', api: 'bf_api_url', auth: 'bf_auth_v1', cache: 'bf_cache_v1' };
 
   function lsGet(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota */ } }
@@ -77,7 +77,16 @@ const Store = (() => {
     async loadAll() {
       if (mode() === 'local') return publicView(localLoad());
       const r = await gasGet('getAll');
-      return { settings: Ranking.mergeSettings(r.settings), regions: r.regions || [], players: r.players || [], teams: r.teams || [], results: r.results || null };
+      const d = { settings: Ranking.mergeSettings(r.settings), regions: r.regions || [], players: r.players || [], teams: r.teams || [], results: r.results || null };
+      try { lsSet(LS.cache, { api: apiUrl, at: Date.now(), data: d }); } catch (e) { /* 용량 초과 등 무시 */ }
+      return d;
+    },
+    /** 서버 모드에서 마지막으로 받은 데이터 (없으면 null). 화면을 먼저 그리고 서버 응답으로 갱신할 때 사용 */
+    cachedAll() {
+      if (mode() === 'local') return null;
+      const c = lsGet(LS.cache);
+      if (!c || c.api !== apiUrl || !c.data) return null;
+      return { ...c.data, settings: Ranking.mergeSettings(c.data.settings), cachedAt: c.at };
     },
 
     // ----- 설정 -----

@@ -130,7 +130,7 @@ body.is-public .bottom-nav { display: flex; position: fixed; left: 0; right: 0; 
 .chip-nav { background: var(--navy-2); color: var(--on-navy); font-size: 11.5px; font-weight: 500; padding: 7px 11px; border-radius: 999px; white-space: nowrap; border: none; cursor: pointer; min-height: 32px; }
 .chip-nav.active { background: var(--orange); color: #fff; font-weight: 700; }
 .hero-tabs { display: flex; margin-top: 2px; }
-.hero-tabs button { flex: 1; background: none; border: none; border-bottom: 3px solid transparent; color: var(--on-navy); font-size: 13px; font-weight: 500; padding: 4px 0 11px; cursor: pointer; }
+.hero-tabs button { flex: 1; background: none; border: none; border-bottom: 3px solid transparent; color: var(--on-navy); font-size: 12.5px; font-weight: 500; padding: 4px 0 11px; cursor: pointer; white-space: nowrap; }
 .hero-tabs button.active { color: #fff; font-weight: 700; border-bottom-color: var(--orange); }
 .hero.has-tabs { padding-bottom: 0; }
 
@@ -349,3 +349,11 @@ body.is-admin .toast { bottom: 24px; }
 }
 
 .rules-toggle { background: none; border: none; color: var(--orange-text); font-size: 12px; font-weight: 700; cursor: pointer; padding: 6px 0 0; }
+
+body.is-public .tbl { font-size: 12px; }
+body.is-public .tbl th, body.is-public .tbl td { padding: 8px 5px; }
+/* 전체기록: 좁은 화면에서 순위·이름 열 고정 */
+#rec-table th:nth-child(1), #rec-table td:nth-child(1) { position: sticky; left: 0; width: 44px; min-width: 44px; max-width: 44px; box-sizing: border-box; background: var(--card, #fff); z-index: 1; }
+#rec-table th:nth-child(2), #rec-table td:nth-child(2) { position: sticky; left: 44px; background: var(--card, #fff); z-index: 1; box-shadow: 4px 0 6px -4px rgba(0,0,0,.12); }
+#rec-table thead th:nth-child(1), #rec-table thead th:nth-child(2) { z-index: 2; }
+#rec-table tr.me td:nth-child(1), #rec-table tr.me td:nth-child(2) { background: var(--orange-tint); }

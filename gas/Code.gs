@@ -35,7 +35,7 @@ function doGet(e) {
     const action = (e.parameter || {}).action;
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     switch (action) {
-      case 'getAll': return resp(getAll(ss));
+      case 'getAll': return respText(getAllCached(ss));
       case 'ping': return resp({ ok: true, time: new Date().toISOString() });
       default: return resp({ error: 'Unknown action: ' + action });
     }
@@ -51,6 +51,7 @@ function doPost(e) {
     const action = body.action;
     if (action === 'login') return resp(login(body.pin));
     requireAdminToken(body.token);
+    invalidateCache();
     switch (action) {
       case 'saveSettings': return resp({ settings: saveSettings(ss, body.settings) });
       case 'saveRegion': return resp({ regions: saveRegion(ss, body.region) });
@@ -85,7 +86,20 @@ function requireAdminToken(token) {
   if (CacheService.getScriptCache().get('tok_' + token) !== 'admin') throw new Error('로그인 토큰이 만료되었습니다. 다시 로그인하세요.');
 }
 
-// ===== 조회 =====
+// ===== 조회 (캐시) =====
+// getAll 응답 JSON을 스크립트 캐시에 보관해 시트 5장을 매번 읽지 않도록 함 (쓰기 시 무효화, 최대 10분).
+const ALL_CACHE_KEY = 'getAll_v1';
+const ALL_CACHE_TTL_SEC = 600;
+function getAllCached(ss) {
+  const cache = CacheService.getScriptCache();
+  try { const hit = cache.get(ALL_CACHE_KEY); if (hit) return hit; } catch (e) { /* ignore */ }
+  const json = JSON.stringify(getAll(ss));
+  try { if (json.length < 95000) cache.put(ALL_CACHE_KEY, json, ALL_CACHE_TTL_SEC); } catch (e) { /* 100KB 초과 등 */ }
+  return json;
+}
+function invalidateCache() { try { CacheService.getScriptCache().remove(ALL_CACHE_KEY); } catch (e) { /* ignore */ } }
+function respText(json) { return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON); }
+
 function getAll(ss) {
   return { settings: getSettings(ss), regions: getRegions(ss), players: getPlayers(ss), teams: getTeams(ss), results: getResults(ss) };
 }
