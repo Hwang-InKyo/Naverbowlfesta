@@ -431,6 +431,11 @@
   }
 
   // ----- 신청서 엑셀 업로드 -----
+  function uploadHint(u) {
+    const p = u.parsed; const name = (u.regionName || '').trim();
+    const existing = name ? state.data.regions.find(r => r.name === name) : null;
+    return `클럽명: <b>${esc(p.clubName || '-')}</b> · ${!name ? '<span class="form-error" style="display:inline">지역명을 입력하세요</span>' : existing ? `기존 지역 <b>${esc(existing.name)}</b>에 등록 (현재 ${state.data.players.filter(x => x.regionId === existing.id).length}명)` : '새 지역으로 추가'}`;
+  }
   function renderUploadCard() {
     const s = S();
     const ups = state.uploads;
@@ -441,11 +446,11 @@
     ups.forEach((u, i) => {
       const p = u.parsed;
       if (!p) { html += `<div class="lane-box mt"><b>${esc(u.fileName)}</b><p class="form-error">${esc(u.error || '읽기 실패')}</p></div>`; return; }
-      const existing = state.data.regions.find(r => r.name === (u.regionName || p.clubName));
+      // (지역명 안내 문구는 uploadHint 로 생성, 입력 중에는 DOM 만 갱신해 버튼 클릭이 끊기지 않게 함)
       const groups = {}; p.players.forEach(x => { groups[x.group] = (groups[x.group] || 0) + 1; });
       const unknownGroups = Object.keys(groups).filter(g => !s.groups.some(x => x.name === g));
       html += `<div class="lane-box mt"><div class="row between"><b>${esc(u.fileName)}</b>${u.done ? '<span class="badge final">등록 완료</span>' : ''}</div>
-        <div class="form-row mt"><div class="form-group"><label>클럽(지역) 이름</label><input type="text" data-upload-region="${i}" value="${esc(u.regionName || p.clubName)}"></div><div class="form-group" style="align-self:flex-end"><span class="small">${existing ? `기존 지역 <b>${esc(existing.name)}</b>에 등록 (현재 ${state.data.players.filter(x => x.regionId === existing.id).length}명)` : '새 지역으로 추가'}</span></div></div>
+        <div class="form-row mt"><div class="form-group"><label>지역명 <span class="muted" style="font-weight:400">(팀명은 지역명+번호로 생성, 예: 청주 → 청주1, 청주2)</span></label><input type="text" data-upload-region="${i}" value="${esc(u.regionName || '')}" placeholder="예: 청주" ${u.done ? 'disabled' : ''}></div><div class="form-group" style="align-self:flex-end"><span class="small" data-upload-hint="${i}">${uploadHint(u)}</span></div></div>
         <p class="small">개인전 <b>${p.players.length}</b>명 (${Object.entries(groups).map(([g, n]) => esc(g) + ' ' + n + '명').join(', ') || '-'}) · 여성 ${p.players.filter(x => x.gender === 'F').length}명 · 사이드 ${p.players.filter(x => x.side).length}명 · 3인조 ${p.reps.length}명 · 스카치 ${p.scotch.length}팀 · 베이커 ${p.baker.length}팀</p>
         <p class="small muted">${p.players.map(x => esc(x.name) + (x.handicap ? '(' + x.handicap + ')' : '')).join(', ')}</p>
         ${unknownGroups.length ? `<p class="form-error">신청서의 조 이름 ${unknownGroups.map(esc).join(', ')} 이(가) 설정의 조(${s.groups.map(g => esc(g.name)).join(', ')})와 다릅니다. 순서대로 대응시켜 등록합니다.</p>` : ''}
@@ -466,7 +471,10 @@
         const wb = XLSX.read(buf, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-        u.parsed = Signup.parse(rows); u.regionName = u.parsed.clubName;
+        u.parsed = Signup.parse(rows);
+        const club = (u.parsed.clubName || '').trim();
+        const known = club ? state.data.regions.find(r => r.name === club || (r.note || '').includes(club)) : null;
+        u.regionName = known ? known.name : '';
         if (!u.parsed.players.length) { u.error = '선수를 찾지 못했습니다. 양식을 확인하세요.'; u.parsed = null; }
       } catch (e) { u.error = '읽기 실패: ' + e.message; }
       state.uploads.push(u);
@@ -478,10 +486,12 @@
   async function registerSignup(i) {
     const u = state.uploads[i]; if (!u || !u.parsed || u.done) return;
     const d = state.data; const s = S(); const p = u.parsed;
-    const regionName = (u.regionName || p.clubName || '').trim();
-    if (!regionName) return toast('클럽(지역) 이름을 입력하세요.', true);
+    const regionName = (u.regionName || '').trim();
+    if (!regionName) return toast(`${u.fileName}: 지역명을 입력하세요 (클럽명 ${p.clubName || '-'} → 예: 청주)`, true);
     let region = d.regions.find(r => r.name === regionName);
-    if (!region) { region = { id: Store.uid('r'), name: regionName, leader: '', note: '' }; d.regions = await Store.saveRegion(region); region = d.regions.find(r => r.name === regionName) || region; }
+    const clubNote = p.clubName && p.clubName !== regionName ? `클럽: ${p.clubName}` : '';
+    if (!region) { region = { id: Store.uid('r'), name: regionName, leader: '', note: clubNote }; d.regions = await Store.saveRegion(region); region = d.regions.find(r => r.name === regionName) || region; }
+    else if (clubNote && !(region.note || '').includes(p.clubName)) { d.regions = await Store.saveRegion({ ...region, note: [region.note, clubNote].filter(Boolean).join(' · ') }); region = d.regions.find(r => r.id === region.id) || region; }
     // 조 이름 매핑: 이름 일치 → 없으면 순서
     const formGroups = [...new Set(p.players.map(x => x.group))];
     const groupId = g => { const byName = s.groups.find(x => x.name === g); if (byName) return byName.id; const idx = formGroups.indexOf(g); return s.groups[idx] ? s.groups[idx].id : ''; };
@@ -505,7 +515,7 @@
     if (u.replace !== false || p.scotch.length) d.teams = await Store.replaceTeams(region.id, 'scotch', mk('scotch', p.scotch));
     if (u.replace !== false || p.baker.length) d.teams = await Store.replaceTeams(region.id, 'baker', mk('baker', p.baker));
     u.done = true;
-    return `${regionName}: 선수 ${list.length}명, 스카치 ${p.scotch.length}팀, 베이커 ${p.baker.length}팀 등록`;
+    return `${regionName}${p.clubName && p.clubName !== regionName ? `(${p.clubName})` : ''}: 선수 ${list.length}명, 스카치 ${p.scotch.length}팀, 베이커 ${p.baker.length}팀 등록`;
   }
 
   // ----- 배정 -----
@@ -554,6 +564,7 @@
         <div class="checkbox-grid">${cands.map(p => `<label class="checkbox-item"><input type="checkbox" class="team-cb" value="${esc(p.id)}" data-gender="${p.gender}"> ${esc(p.name)} <small>${p.gender === 'F' ? '여' : '남'}${p.handicap ? ' · 핸디 ' + p.handicap : ''}</small></label>`).join('') || '<span class="muted small">선택 가능한 선수가 없습니다.</span>'}</div>
         <div class="row mt"><button class="btn btn-small btn-primary" data-action="add-team" data-event="${event}">팀 등록</button>
         <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="${event}">테이블 자동 배정</button>
+        <button class="btn btn-small btn-outline" data-action="rename-teams" data-event="${event}" title="모든 팀 이름을 지역명+번호(청주1, 청주2…)로 다시 붙입니다">팀명 재생성 (지역명+번호)</button>
         <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"></div></div>`;
     }
     html += `<div class="card"><h2>${ev.name} 팀 (${rows.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-assign-table" data-name="${ev.name}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
@@ -814,7 +825,10 @@
       case 'csv': return tableCsv(el.dataset.sel, el.dataset.name);
       case 'print': return window.print();
       case 'signup-register': { const msg = await run(() => registerSignup(num(el.dataset.i))); if (msg) toast(msg); return render(); }
-      case 'signup-register-all': { const msgs = []; await run(async () => { for (let i = 0; i < state.uploads.length; i++) { const m = await registerSignup(i); if (m) msgs.push(m); } }); toast(msgs.length + '개 클럽 등록 완료'); return render(); }
+      case 'signup-register-all': {
+        const missing = state.uploads.filter(u => u.parsed && !u.done && !(u.regionName || '').trim());
+        if (missing.length) return toast(`지역명이 비어 있는 신청서가 ${missing.length}개 있습니다. 각 파일의 지역명을 입력하세요.`, true);
+        const msgs = []; await run(async () => { for (let i = 0; i < state.uploads.length; i++) { const m = await registerSignup(i); if (m) msgs.push(m); } }); toast(msgs.length + '개 지역 등록 완료'); return render(); }
       case 'signup-clear': state.uploads = []; return render();
       case 'copy-prompt': { const t = IMPORT_PROMPT(num(el.dataset.n)); try { await navigator.clipboard.writeText(t); toast('요청문을 복사했습니다. AI 앱에 사진과 함께 붙여넣으세요.'); } catch (e) { prompt('아래 요청문을 복사하세요.', t); } return; }
       case 'score-import-preview': return previewScoreImport(el.dataset.event, state.scoreGroup || S().groups[0].id);
@@ -841,6 +855,13 @@
         const upd = list.map(p => ({ ...p, lane: a2[p.id].lane, pos: a2[p.id].pos }));
         await run(async () => { d.players = await Store.savePlayers(upd); await Store.saveSettings({ tableFrom: from, perTable: per }); d.settings.tableFrom = from; d.settings.perTable = per; }, `${tables[0]}~${tables[tables.length - 1]}번 테이블(${tableLanes(tables[0]).split('·')[0]}~${2 * tables[tables.length - 1]}레인)에 배정했습니다.`); return render();
       }
+      case 'rename-teams': {
+        const event = el.dataset.event; if (!(await guardDirty())) return;
+        if (!confirm(`${EV[event].name} 모든 팀 이름을 지역명+번호(예: 청주1, 청주2)로 다시 붙일까요?`)) return;
+        const d = state.data; const counter = {};
+        const list = d.teams.map((t, i) => ({ t, i })).filter(x => x.t.event === event).sort((a, b) => num(a.t.lane, 999) - num(b.t.lane, 999) || a.i - b.i).map(x => x.t)
+          .map(t => { counter[t.regionId] = (counter[t.regionId] || 0) + 1; return { id: t.id, name: `${regionName(t.regionId)}${counter[t.regionId]}` }; });
+        const r = await run(() => Store.saveTeams(list), `${list.length}개 팀 이름을 다시 붙였습니다.`); if (r) d.teams = r; return render(); }
       case 'add-team': {
         const ev = el.dataset.event; const ids = $$('.team-cb:checked').map(c => c.value);
         const size = EV[ev].size;
@@ -954,7 +975,7 @@
     if (el.dataset.impRow != null) { const r = state.scoreImport && state.scoreImport.rows[num(el.dataset.impRow)]; if (r) { r.candidateId = el.value || null; r.confidence = 1; } return render(); }
     if (el.dataset.impI != null) { const r = state.scoreImport && state.scoreImport.rows[num(el.dataset.impI)]; if (r) r.games[num(el.dataset.impG)] = el.value === '' ? null : Math.max(0, Math.min(300, num(el.value))); return; }
     if (k === 'signup-files') { const files = [...el.files]; el.value = ''; return readSignupFiles(files); }
-    if (el.dataset.uploadRegion != null) { const u = state.uploads[num(el.dataset.uploadRegion)]; if (u) u.regionName = el.value.trim(); return render(); }
+    if (el.dataset.uploadRegion != null) return; // onInput 에서 처리
     if (el.dataset.uploadReplace != null) { const u = state.uploads[num(el.dataset.uploadReplace)]; if (u) u.replace = el.checked; return; }
     if (k === 'import-json') {
       const file = el.files[0]; if (!file) return;
@@ -994,6 +1015,7 @@
     if (el.dataset.input === 'rank-q') { state.rankQ = el.value; return debouncedRender('rank-q'); }
     if (el.dataset.input === 'rec-q') { state.recQ = el.value; return debouncedRender('rec-q'); }
     if (el.dataset.input === 'players-q') { state.playersQ = el.value; return debouncedRender('players-q'); }
+    if (el.dataset.uploadRegion != null) { const i = num(el.dataset.uploadRegion); const u = state.uploads[i]; if (!u) return; u.regionName = el.value.trim(); const h = $(`[data-upload-hint="${i}"]`); if (h) h.innerHTML = uploadHint(u); return; }
   }
 
   document.addEventListener('DOMContentLoaded', init);
