@@ -1,7 +1,7 @@
 """참가 신청서 양식(docs/signup-template.xlsx) 생성.  python3 tools/make-signup-template.py
-제45회 신청서와 같은 틀(A~M열, A4 세로 1장):
+제45회 신청서와 같은 틀(A~M열, A4 세로 2장):
   1조·2조 가로 블록(각 20명), 3조(20명)는 1조 아래, 그 옆에 참가비 내역(수식)과 3인조(이름·성별·핸디·비고),
-  아래에 스카치(왼쪽)·베이커(오른쪽)를 나란히, 팀마다 팀원 한 명씩 세로로(팀 | 이름 | 성별 | 핸디 | 비고).
+  아래(2쪽)에 스카치(왼쪽)·베이커(오른쪽) 각 10팀을 나란히, 팀마다 팀원 한 명씩 세로로(팀 | 이름 | 성별 | 핸디 | 비고).
 핸디는 한 칸(여성·시니어·프로 감점 등 게임당 핸디 합계). 팀 핸디는 팀원 핸디의 합으로 적용된다.
 수식·라벨 칸은 시트 보호로 잠그고 노란 입력 칸만 열어 둔다. js/signup.js 의 블록 파서가 그대로 읽는다."""
 from openpyxl import Workbook
@@ -15,7 +15,7 @@ yellow = PatternFill('solid', fgColor='FFF2CC'); navy = PatternFill('solid', fgC
 thin = Side(style='thin', color='999999'); box = Border(left=thin, right=thin, top=thin, bottom=thin)
 center = Alignment(horizontal='center', vertical='center'); left = Alignment(horizontal='left', vertical='center'); right = Alignment(horizontal='right', vertical='center')
 UNLOCKED = Protection(locked=False)
-GROUP_ROWS = 20; TEAMS = 5; LASTCOL = 13  # M
+GROUP_ROWS = 20; TEAMS = 10; LASTCOL = 13  # M
 FEES = [('개인전 참가비', 35000), ('챔프전 참가비', 10000), ('사이드 참가비', 10000), ('클럽 참가비', 110000), ('클럽 찬조금', 50000)]
 
 def f(size=9, bold=False, color='000000'): return Font(name=FONT, size=size, bold=bold, color=color)
@@ -41,7 +41,7 @@ def build(ws, example):
     ws.sheet_view.showGridLines = False
     widths = {'A': 6.5, 'B': 4.5, 'C': 10, 'D': 4.5, 'E': 6, 'F': 5.5, 'G': 5.5, 'H': 9, 'I': 10, 'J': 4.5, 'K': 7.5, 'L': 5.5, 'M': 9.5}
     for k, v in widths.items(): ws.column_dimensions[k].width = v
-    for r in range(1, 70): ws.row_dimensions[r].height = 14
+    for r in range(1, 90): ws.row_dimensions[r].height = 14
     merge(ws, 1, 1, LASTCOL); t = ws.cell(row=1, column=1, value='제46회 네이버 볼링 동호회 서울 전국대회 참가 신청서'); t.font = f(14, True); t.alignment = center; ws.row_dimensions[1].height = 24
     merge(ws, 2, 1, LASTCOL); n = ws.cell(row=2, column=1, value='노란 칸만 입력 · 3인조/팀 명단에는 개인전 명단과 똑같은 이름 · 챔프전은 1조만 · 사이드·챔프전 참가는 O 표시 · 수량·금액은 자동 계산')
     n.font = f(8, color='595959'); n.alignment = center
@@ -147,8 +147,11 @@ def build(ws, example):
     merge(ws, r, 5, LASTCOL); acc = ws.cell(row=r, column=5, value='입금계좌 : (대회 공지의 계좌)'); acc.font = f(9); acc.alignment = left
     merge(ws, r + 1, 1, LASTCOL); fin = ws.cell(row=r + 1, column=1, value='위와 같이 제46회 네이버 볼링 동호회 서울 전국대회 참가를 신청합니다.'); fin.font = f(10, True); fin.alignment = center
     end_row = r + 1
+    # 인쇄: A4 세로, 폭 맞춤. 1쪽 = 개인전·참가비·3인조, 2쪽 = 스카치·베이커·총금액 (총 인원 행 뒤에서 쪽 나눔)
+    from openpyxl.worksheet.pagebreak import Break
+    ws.row_breaks.append(Break(id=sr))
     ws.print_area = f'A1:{L(LASTCOL)}{end_row}'
-    ws.page_setup.orientation = 'portrait'; ws.page_setup.paperSize = ws.PAPERSIZE_A4; ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 1
+    ws.page_setup.orientation = 'portrait'; ws.page_setup.paperSize = ws.PAPERSIZE_A4; ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
     ws.page_margins.left = ws.page_margins.right = 0.4; ws.page_margins.top = ws.page_margins.bottom = 0.5
     ws.print_options.horizontalCentered = True
