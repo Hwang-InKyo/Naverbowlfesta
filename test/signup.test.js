@@ -68,12 +68,13 @@ test('parses the 45th-tournament form: stacked 3조 block, side tables ignored, 
 });
 
 const ftpl = require('./fixtures/signup-template.json');
-test('parses the recommended A4 template: 1·2조 blocks, 3조 below, fee table beside it, 챔프전, 지역명', () => {
+test('parses the recommended A4 template: 1·2조 blocks, 3조 below, fee table, one-team-per-row sections', () => {
   const r = Signup.parse(ftpl.rows);
   assert.equal(r.clubName, '드림존'); assert.equal(r.regionName, '청주');
   assert.deepEqual(r.players.map(p => [p.name, p.group, p.gender, p.handicap, p.side, p.champ]), [
     ['홍길동', '1조', 'M', 0, true, true], ['김영희', '1조', 'F', 15, false, false], ['박철수', '1조', 'M', 3, true, true],
     ['이순자', '2조', 'F', 20, true, false], ['최민수', '2조', 'M', -7, false, false], ['정미라', '3조', 'F', 15, true, false], ['강동원', '3조', 'M', 0, true, false]]);
+  assert.equal(r.players[0].seniorHandicap, 0, '핸디 한 칸 양식');
   assert.deepEqual(r.reps, ['홍길동', '박철수', '최민수']);
   assert.deepEqual(r.scotch.map(t => t.map(m => m.name)), [['홍길동', '김영희'], ['박철수', '이순자'], ['최민수', '정미라']]);
   assert.deepEqual(r.baker.map(t => t.map(m => m.name)), [['홍길동', '박철수', '최민수'], ['김영희', '이순자', '정미라']]);
@@ -92,8 +93,8 @@ test('fee lines are read from the older forms too', () => {
 
 test('template: typo in a team is resolved, missing member warned', () => {
   const rows = JSON.parse(JSON.stringify(ftpl.rows));
-  rows[39][2] = '김영히';        // 스카치 1팀 두번째 (C40)
-  rows[49][2] = null;           // 베이커 1팀 두번째 비움 (C50)
+  rows[38][4] = '김영히';        // 스카치 1팀 선수2 (E39)
+  rows[44][4] = null;           // 베이커 1팀 선수2 비움 (E45)
   const r = Signup.parse(rows);
   assert.deepEqual(r.scotch[0].map(m => m.name), ['홍길동', '김영희']);
   assert.ok(r.warnings.some(w => w.includes('김영히') && w.includes('김영희')));

@@ -30,6 +30,23 @@
   const groupLabel = v => { const s = str(v).replace(/\s+/g, ''); return /^\d+조$/.test(s) ? s : ''; };
   const distance = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]); for (let j = 1; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; };
 
+  /** '선수1 | 선수2 | (선수3)' 헤더가 있는 섹션: 헤더 아래 한 행에 한 팀. 헤더가 없으면 null */
+  function horizontalTeams(rows, from, to, size, out) {
+    if (from < 0) return null;
+    let cols = [];
+    for (let r = from; r < Math.min(to, from + 3) && !cols.length; r++) (rows[r] || []).forEach((v, c) => { if (/^선수\s*\d+$/.test(str(v))) cols.push({ c, r }); });
+    if (!cols.length) return null;
+    const teams = [];
+    for (let r = cols[0].r + 1; r < to; r++) {
+      if ((rows[r] || []).slice(0, 4).some(v => has(v, '소계'))) break;
+      const members = cols.map(x => str(cell(rows, r, x.c))).filter(isName).map(name => ({ name, gender: '' }));
+      if (!members.length) continue;
+      if (size && members.length !== size) out.warnings.push(`${size}인 팀 인원이 맞지 않습니다: ${members.map(m => m.name).join(', ')}`);
+      teams.push(members);
+    }
+    return teams;
+  }
+
   /** 라벨 검색: 특정 열 범위에서 키워드가 있는 첫 행. 긴 안내문(예: "3인조·스카치 이름은 …")은 라벨로 보지 않는다 */
   function findRow(rows, kw, from = 0, cols = 4) {
     for (let r = from; r < rows.length; r++) for (let c = 0; c < Math.min(cols, (rows[r] || []).length); c++) { const v = str(cell(rows, r, c)); if (v.length <= 24 && has(v, kw)) return r; }
@@ -156,10 +173,12 @@
     };
     if (repsRow >= 0) {
       const to = [scotchRow, bakerRow, endRow].filter(x => x > repsRow).reduce((a, b) => Math.min(a, b), rows.length);
-      for (let r = repsRow; r < to; r++) { const name = str(cell(rows, r, left.nameCol)); if (isName(name)) out.reps.push(name); }
+      const h = horizontalTeams(rows, repsRow, to, 0, out);
+      if (h) out.reps = h.flat().map(m => m.name);
+      else for (let r = repsRow; r < to; r++) { const name = str(cell(rows, r, left.nameCol)); if (isName(name)) out.reps.push(name); }
     } else out.warnings.push('3인조(대표) 명단을 찾지 못했습니다.');
-    if (scotchRow >= 0) { const to = [bakerRow, endRow].filter(x => x > scotchRow).reduce((a, b) => Math.min(a, b), rows.length); out.scotch = sectionTeams(scotchRow, to, 2); }
-    if (bakerRow >= 0) out.baker = sectionTeams(bakerRow, endRow, 3);
+    if (scotchRow >= 0) { const to = [bakerRow, endRow].filter(x => x > scotchRow).reduce((a, b) => Math.min(a, b), rows.length); out.scotch = horizontalTeams(rows, scotchRow, to, 2, out) || sectionTeams(scotchRow, to, 2); }
+    if (bakerRow >= 0) out.baker = horizontalTeams(rows, bakerRow, endRow, 3, out) || sectionTeams(bakerRow, endRow, 3);
 
     validate(out);
     return out;
@@ -195,22 +214,8 @@
       if (b.repCol >= 0 && yes(cell(rows, r, b.repCol))) out.reps.push(name);
     }
     if (!out.players.length) out.warnings.push('개인전 선수를 찾지 못했습니다.');
-    // 팀: 섹션 라벨 다음의 '선수1' 헤더 행에서 열 위치를 읽고, 이름이 하나라도 있는 행이 한 팀
-    const teamRows = (from, to, size) => {
-      const teams = []; if (from < 0) return teams;
-      let cols = [];
-      for (let r = from; r < Math.min(to, from + 3) && !cols.length; r++) rows[r].forEach((v, c) => { if (/^선수\s*\d+$/.test(str(v))) cols.push({ c, r }); });
-      if (!cols.length) return teams;
-      for (let r = cols[0].r + 1; r < to; r++) {
-        const members = cols.map(x => str(cell(rows, r, x.c))).filter(isName).map(name => ({ name, gender: '' }));
-        if (!members.length) continue;
-        if (size && members.length !== size) out.warnings.push(`${size}인 팀 인원이 맞지 않습니다: ${members.map(m => m.name).join(', ')}`);
-        teams.push(members);
-      }
-      return teams;
-    };
-    if (scotchRow >= 0) out.scotch = teamRows(scotchRow, bakerRow > scotchRow ? bakerRow : rows.length, 2);
-    if (bakerRow >= 0) out.baker = teamRows(bakerRow, rows.length, 3);
+    if (scotchRow >= 0) out.scotch = horizontalTeams(rows, scotchRow, bakerRow > scotchRow ? bakerRow : rows.length, 2, out) || [];
+    if (bakerRow >= 0) out.baker = horizontalTeams(rows, bakerRow, rows.length, 3, out) || [];
     validate(out);
     return out;
   }
