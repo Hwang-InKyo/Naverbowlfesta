@@ -24,7 +24,7 @@
   const has = (v, kw) => str(v).replace(/\s+/g, '').includes(kw);
   const isEmpty = v => str(v) === '';
   // 사람 이름: 한글 2~6자 또는 영문 (공백·숫자·기호가 섞인 안내문/금액 줄은 제외)
-  const isName = v => { const s = str(v); return (/^[가-힣]{2,6}$/.test(s) || /^[A-Za-z][A-Za-z.\-']{1,20}$/.test(s)) && !/성명|이름|순번|소계|합계|총원|총인원/.test(s); };
+  const isName = v => { const s = str(v); return (/^[가-힣]{2,6}$/.test(s) || /^[A-Za-z][A-Za-z.\-']{1,20}$/.test(s)) && !/성명|이름|순번|소계|합계|총원|총인원|항목|단가|수량|금액|성별|비고|핸디|사이드|챔프전|참가비|찬조/.test(s); };
   const genderOf = v => { const s = str(v); if (/^(여|F|f|여자)$/.test(s)) return 'F'; if (/^(남|M|m|남자)$/.test(s)) return 'M'; return ''; };
   const yes = v => /^(O|o|0|ㅇ|Y|y|예|참가|√|✓)$/.test(str(v)) || v === true;
   const groupLabel = v => { const s = str(v).replace(/\s+/g, ''); return /^\d+조$/.test(s) ? s : ''; };
@@ -115,6 +115,8 @@
     blocks.forEach(b => {
       let to = totalRow > b.from ? Math.min(totalRow, indEnd) : indEnd;
       labels.forEach(l => { if (l.r >= b.from && l.r < to && Math.abs(l.c - b.nameCol) <= 2) to = l.r; });
+      // 성명 열에 '참가비 내역' 같은 표 제목이 나오면 그 행부터는 명단이 아니다 (2조 블록 아래에 참가비 표가 오는 양식)
+      for (let r = b.from; r < to; r++) { const v = str(cell(rows, r, b.nameCol)); if (has(v, '참가비') && has(v, '내역')) { to = r; break; } }
       b.to = to;
     });
 
