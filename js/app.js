@@ -522,7 +522,13 @@
       if (gone.length) { const r = await Store.deletePlayers(gone); d.players = r.players; d.teams = r.teams; }
     }
     const idOf = name => { const m = d.players.find(x => x.regionId === region.id && x.name === name); return m ? m.id : null; };
-    const mk = (ev, teams) => teams.map((t, i) => ({ event: ev, regionId: region.id, name: `${regionName}${i + 1}`, members: t.map(m => idOf(m.name)).filter(Boolean), lane: '', handicap: ev === 'baker' ? (t.filter(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F').length >= 2 ? 5 : t.some(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F') ? 3 : 0) : 0, adjust: 0, games: Array(s.games[ev]).fill(null) }));
+    // 팀 핸디: 신청서에 팀원 핸디가 적혀 있으면 그 합계, 없으면 베이커 여성 규정(1명 +3, 2명 이상 +5)
+    const mk = (ev, teams) => teams.map((t, i) => {
+      const info = ((p.teamInfo || {})[ev] || [])[i] || {};
+      const females = t.filter(m => (d.players.find(x => x.id === idOf(m.name)) || {}).gender === 'F').length;
+      const rule = ev === 'baker' ? (females >= 2 ? 5 : females ? 3 : 0) : 0;
+      return { event: ev, regionId: region.id, name: `${regionName}${i + 1}`, members: t.map(m => idOf(m.name)).filter(Boolean), lane: '', handicap: info.handicap || rule, adjust: 0, games: Array(s.games[ev]).fill(null), note: info.note || '' };
+    });
     if (u.replace !== false || p.scotch.length) d.teams = await Store.replaceTeams(region.id, 'scotch', mk('scotch', p.scotch));
     if (u.replace !== false || p.baker.length) d.teams = await Store.replaceTeams(region.id, 'baker', mk('baker', p.baker));
     if (state.finance) {

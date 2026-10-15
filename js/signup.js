@@ -47,9 +47,38 @@
     return teams;
   }
 
+  /** 섹션 라벨 검색: 모든 열에서 키워드가 있는 짧은 칸 중 가장 위(같은 행이면 왼쪽) → { r, c } */
+  function findLabel(rows, kw, from = 0) {
+    for (let r = from; r < rows.length; r++) for (let c = 0; c < (rows[r] || []).length; c++) { const v = str(rows[r][c]); if (v.length <= 24 && has(v, kw)) return { r, c }; }
+    return null;
+  }
+  /** 세로형 팀 섹션: 라벨 아래 1~2행의 '이름|성별|핸디|비고' 헤더, '팀' 열 값이 있는 행부터 새 팀. 헤더가 없으면 null.
+   *  colFrom~colTo 로 열 범위를 제한해 옆에 나란히 둔 섹션(스카치 | 베이커)을 구분한다 */
+  function verticalTeams(rows, label, to, size, out, colFrom, colTo) {
+    if (!label) return null;
+    let hdr = null;
+    for (let r = label.r; r <= label.r + 2 && !hdr; r++) for (let c = colFrom; c < Math.min(colTo, (rows[r] || []).length); c++) if (/^(성명|이름)$/.test(str(rows[r][c]).replace(/\s+/g, ''))) { hdr = { r, nameCol: c }; break; }
+    if (!hdr) return null;
+    const row = rows[hdr.r]; const find = re => { for (let c = colFrom; c < Math.min(colTo, row.length); c++) if (re.test(str(row[c]).replace(/\s+/g, ''))) return c; return -1; };
+    const genderCol = find(/^성별$/), hcpCol = find(/핸디/), noteCol = find(/^비고$/), teamCol = find(/^(팀|순번|번호)$/);
+    const teams = []; let cur = null;
+    for (let r = hdr.r + 1; r < to; r++) {
+      const name = str(cell(rows, r, hdr.nameCol));
+      if (/소계|총금액|합계/.test(name)) break;
+      const tv = teamCol >= 0 ? cell(rows, r, teamCol) : null;
+      if (!isEmpty(tv) && Number.isFinite(Number(tv))) { cur = { members: [], handicap: 0, note: '' }; teams.push(cur); }
+      if (!isName(name)) continue;
+      if (!cur) { cur = { members: [], handicap: 0, note: '' }; teams.push(cur); }
+      cur.members.push({ name, gender: genderOf(cell(rows, r, genderCol)), handicap: hcpCol >= 0 ? num(cell(rows, r, hcpCol)) : 0, note: noteCol >= 0 ? str(cell(rows, r, noteCol)) : '' });
+    }
+    const list = teams.filter(t => t.members.length);
+    list.forEach(t => { t.handicap = t.members.reduce((a, m) => a + m.handicap, 0); t.note = t.members.map(m => m.note).filter(Boolean).join(' · '); if (size && t.members.length !== size) out.warnings.push(`${size}인 팀 인원이 맞지 않습니다: ${t.members.map(m => m.name).join(', ')}`); });
+    return list;
+  }
+
   /** 라벨 검색: 특정 열 범위에서 키워드가 있는 첫 행. 긴 안내문(예: "3인조·스카치 이름은 …")은 라벨로 보지 않는다 */
   function findRow(rows, kw, from = 0, cols = 4) {
-    for (let r = from; r < rows.length; r++) for (let c = 0; c < Math.min(cols, (rows[r] || []).length); c++) { const v = str(cell(rows, r, c)); if (v.length <= 24 && has(v, kw)) return r; }
+    for (let r = from; r < rows.length; r++) for (let c = 0; c < Math.min(cols, (rows[r] || []).length); c++) { const v = str(cell(rows, r, c)); if ((v.length <= 24 || /입금계좌|위와같이/.test(v.replace(/\s+/g, ''))) && has(v, kw)) return r; }
     return -1;
   }
   /** 헤더 행에서 블록의 열 위치를 읽는다. nameCol 부터 오른쪽으로, 빈 헤더 칸이나 limit 전까지 */
@@ -71,7 +100,7 @@
 
   function parse(rows) {
     rows = Array.from(rows || [], r => Array.isArray(r) ? r : []);
-    const out = { clubName: '', regionName: '', players: [], reps: [], scotch: [], baker: [], fees: null, warnings: [] };
+    const out = { clubName: '', regionName: '', players: [], reps: [], scotch: [], baker: [], teamInfo: { scotch: [], baker: [] }, fees: null, warnings: [] };
     if (!rows.length) { out.warnings.push('빈 시트입니다.'); return out; }
 
     // 클럽명 / 지역명: 라벨 오른쪽의 첫 값
@@ -93,11 +122,13 @@
     if (vertical) return vertical;
 
     // 섹션 경계 (왼쪽 4열 안의 라벨)
-    const repsRow = findRow(rows, '3인조');
-    const scotchRow = findRow(rows, '스카치');
-    const bakerRow = findRow(rows, '베이커');
-    const endRow = (() => { const r1 = findRow(rows, '입금계좌'), r2 = findRow(rows, '위와같이'); const cands = [r1, r2].filter(x => x >= 0); return cands.length ? Math.min(...cands) : rows.length; })();
-    const indEnd = [repsRow, scotchRow, bakerRow, endRow].filter(x => x >= 0).reduce((a, b) => Math.min(a, b), rows.length);
+    const repsL = findLabel(rows, '3인조'), scotchL = findLabel(rows, '스카치'), bakerL = findLabel(rows, '베이커');
+    const repsRow = repsL ? repsL.r : -1, scotchRow = scotchL ? scotchL.r : -1, bakerRow = bakerL ? bakerL.r : -1;
+    const endRow = (() => { const r1 = findRow(rows, '입금계좌', 0, 99), r2 = findRow(rows, '위와같이', 0, 99); const cands = [r1, r2].filter(x => x >= 0); return cands.length ? Math.min(...cands) : rows.length; })();
+    // 개인전 명단의 끝: 왼쪽(A~D열)에 놓인 섹션 라벨 또는 '총 인원' 행 (오른쪽 옆에 둔 3인조 표는 개인전 블록을 끊지 않는다)
+    const leftLabels = [repsL, scotchL, bakerL].filter(l => l && l.c < 4).map(l => l.r);
+    const totalRowAll = (() => { for (let r = 0; r < Math.min(rows.length, endRow); r++) for (let c = 0; c < Math.min(4, rows[r].length); c++) if (has(rows[r][c], '총인원')) return r; return -1; })();
+    const indEnd = leftLabels.concat([endRow], totalRowAll >= 0 ? [totalRowAll] : []).reduce((a, b) => Math.min(a, b), rows.length);
 
     // 개인전 블록: 'N조' 라벨을 모두 찾는다. 라벨 아래 1~2행에 '성명' 헤더가 있으면 그 헤더로,
     // 없으면(3조가 1조 아래에 이어지는 양식) 같은 열의 앞선 블록 열 배치를 물려받는다.
@@ -171,14 +202,24 @@
       }
       return teams.filter(t => t.members.length).map(t => { if (size && t.members.length !== size) out.warnings.push(`${size}인 팀 인원이 맞지 않습니다: ${t.members.map(m => m.name).join(', ')}`); return t.members; });
     };
-    if (repsRow >= 0) {
-      const to = [scotchRow, bakerRow, endRow].filter(x => x > repsRow).reduce((a, b) => Math.min(a, b), rows.length);
-      const h = horizontalTeams(rows, repsRow, to, 0, out);
-      if (h) out.reps = h.flat().map(m => m.name);
-      else for (let r = repsRow; r < to; r++) { const name = str(cell(rows, r, left.nameCol)); if (isName(name)) out.reps.push(name); }
+    // 섹션의 열 범위: 같은 행에 나란히 놓인 다른 섹션 라벨까지. 행 범위: 아래에 놓인 다음 섹션 라벨(또는 총금액/입금계좌)까지
+    const all = [repsL, scotchL, bakerL].filter(Boolean);
+    const colRange = l => { const right = all.filter(x => x !== l && x.r === l.r && x.c > l.c).map(x => x.c); return [Math.max(0, l.c - 1), right.length ? Math.min(...right) : Infinity]; };
+    const rowEnd = l => { const below = all.filter(x => x !== l && x.r > l.r && colRange(x)[0] < colRange(l)[1] && colRange(x)[1] > colRange(l)[0]).map(x => x.r); return [endRow].concat(below).reduce((a, b) => Math.min(a, b), rows.length); };
+    const section = (l, size) => { if (!l) return null; const [c0, c1] = colRange(l); const to = rowEnd(l); return verticalTeams(rows, l, to, size, out, c0, c1) || (horizontalTeams(rows, l.r, to, size, out) || []).map(members => ({ members, handicap: 0, note: '' })) ; };
+    if (repsL) {
+      const v = section(repsL, 0);
+      if (v && v.length) out.reps = v.flatMap(t => t.members.map(m => m.name));
+      else { const to = rowEnd(repsL); for (let r = repsL.r; r < to; r++) { const name = str(cell(rows, r, left.nameCol)); if (isName(name)) out.reps.push(name); } }
     } else out.warnings.push('3인조(대표) 명단을 찾지 못했습니다.');
-    if (scotchRow >= 0) { const to = [bakerRow, endRow].filter(x => x > scotchRow).reduce((a, b) => Math.min(a, b), rows.length); out.scotch = horizontalTeams(rows, scotchRow, to, 2, out) || sectionTeams(scotchRow, to, 2); }
-    if (bakerRow >= 0) out.baker = horizontalTeams(rows, bakerRow, endRow, 3, out) || sectionTeams(bakerRow, endRow, 3);
+    const readTeams = (l, size, key) => {
+      if (!l) return;
+      const [c0, c1] = colRange(l); const to = rowEnd(l);
+      let v = verticalTeams(rows, l, to, size, out, c0, c1);
+      if (!v) { const h = horizontalTeams(rows, l.r, to, size, out); v = h ? h.map(members => ({ members, handicap: 0, note: '' })) : sectionTeams(l.r, to, size).map(members => ({ members, handicap: 0, note: '' })); }
+      out[key] = v.map(t => t.members); out.teamInfo[key] = v.map(t => ({ handicap: t.handicap, note: t.note }));
+    };
+    readTeams(scotchL, 2, 'scotch'); readTeams(bakerL, 3, 'baker');
 
     validate(out);
     return out;
