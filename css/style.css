@@ -380,3 +380,12 @@ body.is-public .tbl th, body.is-public .tbl td { padding: 8px 5px; }
 }
 .side-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .side-grid h3 { margin: 0 0 6px; font-size: 13px; color: var(--text-3); }
+/* 입금 확인 표: 화면 폭에 맞춤 (가로 스크롤 없이) */
+#fin-pay-table { width: 100%; table-layout: auto; font-size: 12px; }
+#fin-pay-table th, #fin-pay-table td { padding: 7px 4px; white-space: nowrap; }
+#fin-pay-table td:last-child, #fin-pay-table th:last-child { white-space: normal; min-width: 140px; }
+#fin-pay-table input[type="number"].sm { width: 84px; }
+#fin-pay-table input[type="date"].sm { width: 118px; padding: 4px 4px; }
+#fin-pay-table input[type="text"].sm { width: 100%; min-width: 110px; box-sizing: border-box; }
+#fin-pay-table input[type="checkbox"] { width: 18px; height: 18px; }
+#fin-pay-table .form-error { font-size: 11px; }

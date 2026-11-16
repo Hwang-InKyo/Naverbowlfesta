@@ -187,21 +187,21 @@ const Finance = (() => {
       const paid = num(pay.paid); paidSum += paid; if (pay.confirmed) confirmed++;
       const issues = (pay.formIssues || []).concat(formTotal != null && diff ? [`신청서 총금액과 계산 금액 차이 ${won(diff)}원`] : []);
       const tip = exp.items.map(i => `${i.label} ${i.qty}×${won(i.unit)}=${won(i.amount)}`).join('\n');
+      const comp = [x.side ? `사${x.side}` : '', x.champ ? `챔${x.champ}` : '', x.scotch ? `스${x.scotch}` : '', x.baker ? `베${x.baker}` : ''].filter(Boolean).join(' ') || '-';
       return `<tr class="${pay.confirmed ? 'paid' : ''}"><td class="left"><b>${esc(x.region.name)}</b>${x.region.note ? `<br><small class="muted">${esc(x.region.note)}</small>` : ''}</td>
-        <td>${x.players}</td><td>${x.side || '-'}</td><td>${x.champ || '-'}</td><td>${x.scotch || '-'}</td><td>${x.baker || '-'}</td>
-        <td class="right">${fromForm != null ? won(fromForm) : `<input type="number" class="sm" style="width:96px" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="formTotal" value="${pay.formTotal != null ? esc(pay.formTotal) : ''}" placeholder="신청서 총액" title="신청서를 다시 올리지 않고 총액만 직접 입력">`}</td>
+        <td>${x.players}</td><td class="small" title="사이드 · 챔프전 · 스카치 · 베이커">${comp}</td>
+        <td class="right">${fromForm != null ? won(fromForm) : `<input type="number" class="sm" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="formTotal" value="${pay.formTotal != null ? esc(pay.formTotal) : ''}" placeholder="신청서 총액" title="신청서를 다시 올리지 않고 총액만 직접 입력">`}</td>
         <td class="right" title="${esc(tip)}">${won(exp.total)}</td>
         <td class="right ${diff ? 'neg' : ''}">${diff == null ? '-' : diff === 0 ? '<span class="ok">일치</span>' : (diff > 0 ? '+' : '') + won(diff)}</td>
-        <td><input type="number" class="sm" style="width:96px" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="paid" value="${pay.paid != null ? esc(pay.paid) : ''}" placeholder="입금액"></td>
-        <td><input type="date" class="sm" style="width:130px" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="paidAt" value="${esc(pay.paidAt || '')}"></td>
-        <td><label class="checkbox-item"><input type="checkbox" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="confirmed" ${pay.confirmed ? 'checked' : ''}> 확인</label></td>
-        <td><input type="text" class="sm" style="width:120px" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="note" value="${esc(pay.note || '')}" placeholder="비고"></td>
-        <td class="left small">${issues.length ? `<span class="form-error" style="display:inline">${issues.map(esc).join('<br>')}</span>` : ''}</td></tr>`;
-    }).join('') || '<tr><td colspan="14" class="empty">등록된 지역이 없습니다. 선수 탭에서 신청서를 올리면 여기에 나타납니다.</td></tr>';
+        <td><input type="number" class="sm" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="paid" value="${pay.paid != null ? esc(pay.paid) : ''}" placeholder="입금액"></td>
+        <td><input type="date" class="sm" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="paidAt" value="${esc(pay.paidAt || '')}"></td>
+        <td><input type="checkbox" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="confirmed" ${pay.confirmed ? 'checked' : ''} title="입금 확인"></td>
+        <td class="left small"><input type="text" class="sm" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="note" value="${esc(pay.note || '')}" placeholder="비고">${issues.length ? `<div class="form-error" style="text-align:left;margin-top:3px">${issues.map(esc).join('<br>')}</div>` : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="10" class="empty">등록된 지역이 없습니다. 선수 탭에서 신청서를 올리면 여기에 나타납니다.</td></tr>';
     return `<div class="card"><h2>지역별 입금 확인 <span class="muted" style="font-weight:500;color:var(--text-3)">확인 ${confirmed}/${rows.length} · 입금 합계 ${won(paidSum)}원 / 계산 ${won(expectedSum)}원</span>
         <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#fin-pay-table" data-name="입금확인">CSV</button></span></h2>
-      <p class="muted small mb">신청서 금액 = 업로드한 신청서의 참가비 내역 총액(없으면 칸에 총액을 직접 입력해도 됨). 계산 금액 = 등록된 명단 × 항목·단가(개인 ${won(fees.individual)}${fees.champ ? ` · 챔프전 ${won(fees.champ)}` : ''}${fees.side ? ` · 사이드 ${won(fees.side)}` : ''} · 클럽 ${won(fees.club)} · 찬조금 ${won(fees.clubDonation)}${fees.team5 ? ` · 5인조 ${won(fees.team5)}` : ''}). 입금액·입금일·확인은 입력 즉시 저장됩니다.</p>
-      <div class="table-scroll"><table class="tbl" id="fin-pay-table"><thead><tr><th class="left">지역</th><th>인원</th><th>사이드</th><th>챔프전</th><th>스카치</th><th>베이커</th><th>신청서 금액</th><th>계산 금액</th><th>차이</th><th>입금액</th><th>입금일</th><th>확인</th><th>비고</th><th class="left">확인 사항</th></tr></thead><tbody>${trs}</tbody></table></div>
+      <p class="muted small mb">구성 = 사이드·챔프전·스카치·베이커 수. 신청서 금액 = 업로드한 신청서의 참가비 내역 총액(없으면 칸에 총액을 직접 입력해도 됨). 계산 금액 = 등록된 명단 × 항목·단가(개인 ${won(fees.individual)}${fees.champ ? ` · 챔프전 ${won(fees.champ)}` : ''}${fees.side ? ` · 사이드 ${won(fees.side)}` : ''} · 클럽 ${won(fees.club)} · 찬조금 ${won(fees.clubDonation)}${fees.team5 ? ` · 5인조 ${won(fees.team5)}` : ''}). 입금액·입금일·확인은 입력 즉시 저장됩니다.</p>
+      <div class="table-scroll"><table class="tbl" id="fin-pay-table"><thead><tr><th class="left">지역</th><th>인원</th><th>구성</th><th>신청서 금액</th><th>계산 금액</th><th>차이</th><th>입금액</th><th>입금일</th><th>확인</th><th class="left">비고 · 확인 사항</th></tr></thead><tbody>${trs}</tbody></table></div>
       ${fin.account ? `<p class="small muted mt">입금계좌: ${esc(fin.account)}</p>` : ''}</div>`;
   }
 
