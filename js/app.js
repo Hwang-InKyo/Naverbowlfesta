@@ -79,14 +79,20 @@
     const cached = Store.cachedAll();
     if (cached) {
       state.data = cached; applyRole(); render();
-      try { state.data = await Store.loadAll(); if (!dirtyCount()) { applyRole(); render(); } }
+      try { state.data = await Store.loadAll(); await loadFinance(); if (!dirtyCount()) { applyRole(); render(); } }
       catch (e) { toast('최신 데이터를 가져오지 못해 이전에 받은 데이터를 표시합니다: ' + e.message, true); }
       return;
     }
     await reload(true); applyRole(); render();
   }
+  /** 정산 데이터(관리자 전용) 로드. 실패하면 기본값으로 시작해 화면이 비지 않게 한다 */
+  async function loadFinance() {
+    if (!isAdmin()) { state.finance = null; return; }
+    try { state.finance = await Store.loadFinance(); }
+    catch (e) { toast('정산 데이터 로드 실패: ' + e.message, true); state.finance = Store.mergeFinance(null); }
+  }
   async function reload(silent) {
-    const fn = async () => { state.data = await Store.loadAll(); state.finance = isAdmin() ? await Store.loadFinance().catch(e => { toast('정산 데이터 로드 실패: ' + e.message, true); return Store.mergeFinance(null); }) : null; };
+    const fn = async () => { state.data = await Store.loadAll(); await loadFinance(); };
     if (silent) { try { await fn(); } catch (e) { state.data = { settings: {}, regions: [], players: [], teams: [], results: null }; toast('데이터 로드 실패: ' + e.message, true); } }
     else await run(fn);
   }
@@ -145,8 +151,8 @@
       case 'players': return renderPlayers();
       case 'assign': return renderAssign();
       case 'individual': return renderIndividual();
-      case 'finance': return Finance.render(state);
-      case 'pools': return Finance.renderPoolsTab(state);
+      case 'finance': case 'pools': if (!state.finance && isAdmin()) { loadFinance().then(render); return '<div class="card"><p class="empty">정산 데이터를 불러오는 중…</p></div>'; }
+        return tab === 'finance' ? Finance.render(state) : Finance.renderPoolsTab(state);
       case 'scotch': case 'baker': return renderTeamEvent(tab);
       case 'standings': return renderStandings();
       case 'settings': return renderSettings();
@@ -532,6 +538,7 @@
     });
     if (u.replace !== false || p.scotch.length) d.teams = await Store.replaceTeams(region.id, 'scotch', mk('scotch', p.scotch));
     if (u.replace !== false || p.baker.length) d.teams = await Store.replaceTeams(region.id, 'baker', mk('baker', p.baker));
+    if (!state.finance) await loadFinance();
     if (state.finance) {
       const prev = state.finance.payments[region.id] || {};
       state.finance.payments[region.id] = { ...prev, form: p.fees || null, formCounts: feeCheck.counts, formIssues: feeCheck.issues, formAt: new Date().toISOString() };
