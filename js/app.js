@@ -23,6 +23,7 @@
   const S = () => Ranking.mergeSettings(state.data.settings);
   const regionById = id => (state.data.regions || []).find(r => r.id === id);
   const regionName = id => { const r = regionById(id); return r ? r.name : '(미정)'; };
+  const hostRegionName = () => { const s = S(); return s.hostRegion || (s.hostRegionId ? regionName(s.hostRegionId) : '(미정)'); };
   const playerById = id => (state.data.players || []).find(p => p.id === id);
   const teamById = id => (state.data.teams || []).find(t => t.id === id);
   const groupName = id => { const g = S().groups.find(x => x.id === id); return g ? g.name : (id || '미편성'); };
@@ -192,7 +193,7 @@
     const rules = (s.rulesNote || '').split('\n').filter(Boolean);
     const shown = state.rulesOpen ? rules : rules.slice(0, 3);
     return `<div class="hero hero-home">
-      <div class="hero-top"><div class="brand-row"><div class="brand-mark sm">볼</div><span class="hero-sub">${esc(regionName(s.hostRegionId))} 주최</span></div><div class="row" style="gap:6px">${heroBadge()}${adminEntry()}</div></div>
+      <div class="hero-top"><div class="brand-row"><div class="brand-mark sm">볼</div><span class="hero-sub">${esc(hostRegionName())} 주최</span></div><div class="row" style="gap:6px">${heroBadge()}${adminEntry()}</div></div>
       <h1 class="hero-title">${esc(s.name)}</h1>
       <p class="hero-meta">${dates.map(fmtDate).join('–')}${s.venue ? ' · ' + esc(s.venue) : ''}</p>
       <div class="hero-panel"><div class="lbl"><span>개인전 진행률</span><b>${pr.individual.done} / ${pr.individual.total}명</b></div><div class="bar"><span style="width:${pct}%"></span></div></div>
@@ -455,7 +456,7 @@
       const groups = {}; p.players.forEach(x => { groups[x.group] = (groups[x.group] || 0) + 1; });
       const unknownGroups = Object.keys(groups).filter(g => !s.groups.some(x => x.name === g));
       html += `<div class="lane-box mt"><div class="row between"><b>${esc(u.fileName)}</b>${u.done ? '<span class="badge final">등록 완료</span>' : ''}</div>
-        <div class="form-row mt"><div class="form-group"><label>지역명 <span class="muted" style="font-weight:400">(팀명은 지역명+번호로 생성, 예: 청주 → 청주1, 청주2)</span></label><input type="text" data-upload-region="${i}" value="${esc(u.regionName || '')}" placeholder="예: 청주" ${u.done ? 'disabled' : ''}></div><div class="form-group" style="align-self:flex-end"><span class="small" data-upload-hint="${i}">${uploadHint(u)}</span></div></div>
+        <div class="form-row mt"><div class="form-group"><label>지역명 <span class="muted" style="font-weight:400">(팀명은 지역명+번호로 생성, 예: 청주 → 청주1, 청주2)</span></label><input type="text" list="region-names" data-upload-region="${i}" value="${esc(u.regionName || '')}" placeholder="예: 청주" ${u.done ? 'disabled' : ''}><datalist id="region-names">${Ranking.REGION_NAMES.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div><div class="form-group" style="align-self:flex-end"><span class="small" data-upload-hint="${i}">${uploadHint(u)}</span></div></div>
         <p class="small">개인전 <b>${p.players.length}</b>명 (${Object.entries(groups).map(([g, n]) => esc(g) + ' ' + n + '명').join(', ') || '-'}) · 여성 ${p.players.filter(x => x.gender === 'F').length}명 · 사이드 ${p.players.filter(x => x.side).length}명 · 3인조 ${p.reps.length}명 · 스카치 ${p.scotch.length}팀 · 베이커 ${p.baker.length}팀</p>
         <p class="small muted">${p.players.map(x => esc(x.name) + (x.handicap ? '(' + x.handicap + ')' : '')).join(', ')}</p>
         ${unknownGroups.length ? `<p class="form-error">신청서의 조 이름 ${unknownGroups.map(esc).join(', ')} 이(가) 설정의 조(${s.groups.map(g => esc(g.name)).join(', ')})와 다릅니다. 순서대로 대응시켜 등록합니다.</p>` : ''}
@@ -752,7 +753,7 @@
     const s = S();
     const sel = (name, cur, opts) => `<select name="${name}">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
     return `<div class="card"><h2>대회 정보</h2><form data-form="save-info">
-      <div class="form-row"><div class="form-group" style="flex:2"><label>대회명</label><input type="text" name="name" value="${esc(s.name)}"></div><div class="form-group"><label>주최 지역</label><select name="hostRegionId">${regionOptions(s.hostRegionId, '선택')}</select></div></div>
+      <div class="form-row"><div class="form-group" style="flex:2"><label>대회명</label><input type="text" name="name" value="${esc(s.name)}"></div><div class="form-group"><label>주최 지역</label><select name="hostRegion">${Ranking.REGION_NAMES.map(n => `<option value="${esc(n)}" ${hostRegionName() === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div></div>
       <div class="form-row"><div class="form-group"><label>1일차</label><input type="date" name="d1" value="${esc(s.dates[0] || '')}"></div><div class="form-group"><label>2일차</label><input type="date" name="d2" value="${esc(s.dates[1] || '')}"></div><div class="form-group" style="flex:2"><label>장소</label><input type="text" name="venue" value="${esc(s.venue || '')}"></div></div>
       <div class="form-row"><div class="form-group"><label>레인 수 (테이블 = 레인 ÷ 2)</label><input type="number" name="lanes" value="${s.lanes || 20}"></div><div class="form-group"><label>시작 테이블</label><input type="number" name="tableFrom" value="${s.tableFrom || 1}"></div><div class="form-group"><label>테이블당 인원(개인전)</label><input type="number" name="perTable" value="${s.perTable || 4}"></div></div>
       <div class="form-group"><label>개인전 조 편성 · 핸디 보너스는 아침 일찍 시작하는 조 등 해당 조에만 입력 (예: 10). 총점에 한 번만 더해집니다</label>
@@ -981,7 +982,7 @@
         const gIds = fd.getAll('g_id'), gNames = fd.getAll('g_name'), gDays = fd.getAll('g_day'), gTimes = fd.getAll('g_time'), gBonus = fd.getAll('g_bonus');
         const groups = gNames.map((name, i) => ({ id: String(gIds[i] || '').trim() || Store.uid('g'), name: String(name).trim(), day: num(gDays[i]) || '', time: String(gTimes[i] || '').trim(), bonus: num(gBonus[i]) })).filter(g => g.name);
         if (!groups.length) return toast('조를 1개 이상 입력하세요.', true);
-        const patch = { name: v('name'), hostRegionId: v('hostRegionId'), dates: [v('d1'), v('d2')], venue: v('venue'), tableFrom: num(v('tableFrom'), 1), lanes: num(v('lanes'), 20), perTable: num(v('perTable'), 4), groups, schedule: v('schedule'), rulesNote: v('rulesNote') };
+        const patch = { name: v('name'), hostRegion: v('hostRegion'), dates: [v('d1'), v('d2')], venue: v('venue'), tableFrom: num(v('tableFrom'), 1), lanes: num(v('lanes'), 20), perTable: num(v('perTable'), 4), groups, schedule: v('schedule'), rulesNote: v('rulesNote') };
         const r = await run(async () => { d.settings = { ...d.settings, ...(await Store.saveSettings(patch)) }; applyRole(); return true; }, '저장되었습니다.'); if (r) render(); return;
       }
       case 'save-rules': {

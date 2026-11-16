@@ -176,7 +176,7 @@ test/               npm test  (node --test test/*.test.js)
 
 ### 데이터 모델
 ```js
-settings { name, venue, dates[2], hostRegionId, status:'ready'|'live'|'final', lanes, tableFrom, perTable,
+settings { name, venue, dates[2], hostRegion(주최 지역명: 서울·천안·일산·속초·평택·청주·화성·김포·대전·광주·원주 중 하나), status:'ready'|'live'|'final', lanes, tableFrom, perTable,
            groups:[{id,name,day,time,bonus}], basis, games:{individual,scotch,baker}, scoresIncludeHandicap:{individual,scotch,baker},
            repCount, points:{individualM,individualF,reps,scotch,baker}, schedule, rulesNote }
 region   { id, name, leader, note }

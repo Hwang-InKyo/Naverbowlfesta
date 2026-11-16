@@ -37,7 +37,7 @@ const SampleData = (() => {
   const settings = {
     ...Ranking.DEFAULT_SETTINGS,
     name: '2026 전국 볼링 페스타', venue: '서울 강남볼링센터 (24레인)', dates: ['2026-10-17', '2026-10-18'], lanes: 24, laneFrom: 1,
-    hostRegionId: 'r_seoul', status: 'live', perTable: 4, tableFrom: 1, repCount: 3,
+    hostRegion: '서울', status: 'live', perTable: 4, tableFrom: 1, repCount: 3,
     groups: [{ id: 'A', name: '1조', day: 1, time: '10:00', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '14:00', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '10:00', bonus: 0 }],
     schedule: '1일차 10:00 1조 개인전 / 14:00 2조 개인전\n2일차 10:00 3조 개인전 / 14:00 스카치·베이커 / 17:00 시상',
     adminPin: '0000'

@@ -31,8 +31,12 @@
     baker: { key: 'baker', name: '베이커', games: 2, size: 3 }
   };
 
+  // 네이버 볼링 동호회 가입 지역 (주최 지역 선택, 신청서 지역명 목록)
+  const REGION_NAMES = ['서울', '천안', '일산', '속초', '평택', '청주', '화성', '김포', '대전', '광주', '원주'];
+
   const DEFAULT_SETTINGS = {
     name: '전국대회', venue: '', dates: ['', ''], lanes: 20, tableFrom: 1,
+    hostRegion: '서울',          // 주최 지역 (REGION_NAMES 중 하나)
     status: 'ready', // ready | live | final
     basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
     games: { individual: 3, scotch: 2, baker: 2 },
@@ -226,6 +230,6 @@
     return { individual: { total: ind.length, done: indDone }, ...ev };
   }
 
-  return { EVENTS, DEFAULT_SETTINGS, mergeSettings, groupBonus, playerHandicap, makeComparator, assignRanks, gameStats,
+  return { EVENTS, REGION_NAMES, DEFAULT_SETTINGS, mergeSettings, groupBonus, playerHandicap, makeComparator, assignRanks, gameStats,
     playerRows, individualRanking, teamRows, teamRanking, repRanking, pointsForRank, regionStandings, resultsOf, progress };
 });
