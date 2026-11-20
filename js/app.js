@@ -559,7 +559,8 @@
     return `<div class="card"><h2>배정 저장 / 되돌리기 <span class="muted" style="font-weight:500;color:var(--text-3)">${assignSummary(d)}</span></h2>
       <p class="muted small mb">자동 편성이나 수정 전에 현재 상태(조·테이블·순번, 팀 테이블)를 이름 붙여 저장해 두면 실수했을 때 그대로 되돌릴 수 있습니다. 최근 10개까지 보관합니다.</p>
       <form data-form="snap-save" class="form-row" style="align-items:flex-end"><div class="form-group" style="flex:2"><label>저장 이름</label><input type="text" name="name" placeholder="예: 자동 편성 직후, 1조 수정 전" required></div><div class="form-group" style="flex:0"><button class="btn btn-small btn-primary" type="submit">현재 배정 저장</button></div>
-        <div class="form-group" style="flex:0"><button class="btn btn-small btn-danger" type="button" data-action="assign-reset">배정 초기화</button></div></form>
+      </form>
+      <div class="row mt"><span class="small muted">초기화:</span><button class="btn btn-small btn-outline" data-action="assign-reset" data-what="groups">조 편성 (조·테이블·순번)</button><button class="btn btn-small btn-outline" data-action="assign-reset" data-what="lanes">테이블 배정 (조는 유지)</button><button class="btn btn-small btn-outline" data-action="assign-reset" data-what="teams">팀 테이블</button><button class="btn btn-small btn-danger" data-action="assign-reset" data-what="all">전체</button></div>
       ${list.length ? `<div class="table-scroll mt"><table class="tbl"><thead><tr><th class="left">이름</th><th class="left">저장 시각</th><th class="left">내용</th><th></th></tr></thead><tbody>
         ${list.map(x => `<tr><td class="left"><b>${esc(x.name)}</b></td><td class="left small">${esc(new Date(x.at).toLocaleString('ko-KR'))}</td><td class="left small">${esc(x.summary || '')}</td><td class="nowrap"><button class="btn btn-xs btn-outline" data-action="snap-restore" data-id="${esc(x.id)}">되돌리기</button> <button class="btn btn-xs btn-danger" data-action="snap-delete" data-id="${esc(x.id)}">삭제</button></td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted small mt">저장된 배정이 없습니다.</p>'}</div>`;
@@ -892,11 +893,14 @@
       case 'del-player': { const p = playerById(id); if (!confirm(`"${p.name}" 선수를 삭제할까요? 소속 팀에서도 제외됩니다.`)) return; await run(async () => { const r = await Store.deletePlayer(id); d.players = r.players; d.teams = r.teams; }, '삭제되었습니다.'); return render(); }
       case 'assign-reset': {
         if (!(await guardDirty())) return;
-        if (!confirm('모든 선수의 조·테이블·순번과 팀 테이블을 비웁니다. 되돌리려면 먼저 "현재 배정 저장"을 해 두세요. 계속할까요?')) return;
+        const what = el.dataset.what || 'all';
+        const desc = { groups: '모든 선수의 조 편성을 비웁니다 (조가 없어지므로 테이블·순번도 함께 비움, 팀 테이블은 유지)', lanes: '모든 선수의 테이블·순번을 비웁니다 (조 편성은 유지)', teams: '스카치·베이커 팀 테이블을 비웁니다', all: '모든 선수의 조·테이블·순번과 팀 테이블을 비웁니다' }[what];
+        if (!confirm(`${desc}. 되돌리려면 먼저 "현재 배정 저장"을 해 두세요. 계속할까요?`)) return;
         await run(async () => {
-          d.players = await Store.savePlayers(d.players.map(p => ({ ...p, group: '', lane: '', pos: '' })));
-          if (d.teams.length) d.teams = await Store.saveTeams(d.teams.map(t => ({ ...t, lane: '' })));
-        }, '배정을 초기화했습니다.'); return render();
+          if (what === 'groups' || what === 'all') d.players = await Store.savePlayers(d.players.map(p => ({ ...p, group: '', lane: '', pos: '' })));
+          else if (what === 'lanes') d.players = await Store.savePlayers(d.players.map(p => ({ ...p, lane: '', pos: '' })));
+          if ((what === 'lanes' || what === 'teams' || what === 'all') && d.teams.length) d.teams = await Store.saveTeams(d.teams.map(t => ({ ...t, lane: '' })));
+        }, { groups: '조 편성을', lanes: '테이블 배정을', teams: '팀 테이블을', all: '배정을 모두' }[what] + ' 초기화했습니다.'); return render();
       }
       case 'snap-restore': {
         if (!(await guardDirty())) return;
