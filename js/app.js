@@ -549,11 +549,29 @@
   }
 
   // ----- 배정 -----
+  /** 배정 스냅샷: 조·테이블·순번(선수)과 테이블(팀)을 이름 붙여 저장했다가 되돌림. settings.assignSnapshots 에 보관 */
+  function assignSummary(d) {
+    const s = S(); const grouped = d.players.filter(p => p.group).length; const laned = d.players.filter(p => p.lane).length; const tl = d.teams.filter(t => t.lane).length;
+    return `조 편성 ${grouped}/${d.players.length}명 · 테이블 ${laned}명 · 팀 테이블 ${tl}/${d.teams.length}팀`;
+  }
+  function renderAssignSnapshots() {
+    const d = state.data; const list = S().assignSnapshots || [];
+    return `<div class="card"><h2>배정 저장 / 되돌리기 <span class="muted" style="font-weight:500;color:var(--text-3)">${assignSummary(d)}</span></h2>
+      <p class="muted small mb">자동 편성이나 수정 전에 현재 상태(조·테이블·순번, 팀 테이블)를 이름 붙여 저장해 두면 실수했을 때 그대로 되돌릴 수 있습니다. 최근 10개까지 보관합니다.</p>
+      <form data-form="snap-save" class="form-row" style="align-items:flex-end"><div class="form-group" style="flex:2"><label>저장 이름</label><input type="text" name="name" placeholder="예: 자동 편성 직후, 1조 수정 전" required></div><div class="form-group" style="flex:0"><button class="btn btn-small btn-primary" type="submit">현재 배정 저장</button></div>
+        <div class="form-group" style="flex:0"><button class="btn btn-small btn-danger" type="button" data-action="assign-reset">배정 초기화</button></div></form>
+      ${list.length ? `<div class="table-scroll mt"><table class="tbl"><thead><tr><th class="left">이름</th><th class="left">저장 시각</th><th class="left">내용</th><th></th></tr></thead><tbody>
+        ${list.map(x => `<tr><td class="left"><b>${esc(x.name)}</b></td><td class="left small">${esc(new Date(x.at).toLocaleString('ko-KR'))}</td><td class="left small">${esc(x.summary || '')}</td><td class="nowrap"><button class="btn btn-xs btn-outline" data-action="snap-restore" data-id="${esc(x.id)}">되돌리기</button> <button class="btn btn-xs btn-danger" data-action="snap-delete" data-id="${esc(x.id)}">삭제</button></td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted small mt">저장된 배정이 없습니다.</p>'}</div>`;
+  }
+  async function saveSnapshots(list) { const d = state.data; d.settings = { ...d.settings, ...(await Store.saveSettings({ assignSnapshots: list })) }; return true; }
+
   function renderAssign() {
     const s = S(); const d = state.data;
     const items = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커']]);
     if (!items.some(i => i[0] === state.assignSub)) state.assignSub = items[0][0];
     let html = subtabs(items, state.assignSub, 'assign-sub', 'sub');
+    if (isAdmin()) html += renderAssignSnapshots();
     if (EV[state.assignSub]) return html + renderTeamAssign(state.assignSub);
     const g = s.groups.find(x => x.id === state.assignSub);
     const rows = Ranking.playerRows(d.players.filter(p => p.group === g.id), d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
@@ -872,6 +890,26 @@
       case 'edit-player': state.editPlayer = { ...playerById(id) }; render(); return window.scrollTo(0, 0);
       case 'cancel-player': state.editPlayer = null; return render();
       case 'del-player': { const p = playerById(id); if (!confirm(`"${p.name}" 선수를 삭제할까요? 소속 팀에서도 제외됩니다.`)) return; await run(async () => { const r = await Store.deletePlayer(id); d.players = r.players; d.teams = r.teams; }, '삭제되었습니다.'); return render(); }
+      case 'assign-reset': {
+        if (!(await guardDirty())) return;
+        if (!confirm('모든 선수의 조·테이블·순번과 팀 테이블을 비웁니다. 되돌리려면 먼저 "현재 배정 저장"을 해 두세요. 계속할까요?')) return;
+        await run(async () => {
+          d.players = await Store.savePlayers(d.players.map(p => ({ ...p, group: '', lane: '', pos: '' })));
+          if (d.teams.length) d.teams = await Store.saveTeams(d.teams.map(t => ({ ...t, lane: '' })));
+        }, '배정을 초기화했습니다.'); return render();
+      }
+      case 'snap-restore': {
+        if (!(await guardDirty())) return;
+        const snap = (s.assignSnapshots || []).find(x => x.id === el.dataset.id); if (!snap) return;
+        if (!confirm(`"${snap.name}" 시점의 배정으로 되돌립니다. 지금 배정은 사라집니다. 계속할까요?`)) return;
+        const pm = new Map(snap.players.map(x => [x.id, x])), tm = new Map((snap.teams || []).map(x => [x.id, x]));
+        const missing = snap.players.filter(x => !playerById(x.id)).length;
+        await run(async () => {
+          d.players = await Store.savePlayers(d.players.map(p => { const x = pm.get(p.id); return x ? { ...p, group: x.group, lane: x.lane, pos: x.pos } : { ...p, group: '', lane: '', pos: '' }; }));
+          if (d.teams.length) d.teams = await Store.saveTeams(d.teams.map(t => { const x = tm.get(t.id); return { ...t, lane: x ? x.lane : '' }; }));
+        }, `"${snap.name}" 배정으로 되돌렸습니다.${missing ? ` (저장 당시 선수 중 ${missing}명은 현재 명단에 없음)` : ''}`); return render();
+      }
+      case 'snap-delete': { if (!confirm('이 저장본을 삭제할까요?')) return; await run(() => saveSnapshots((s.assignSnapshots || []).filter(x => x.id !== el.dataset.id)), '삭제했습니다.'); return render(); }
       case 'auto-groups': {
         if (d.players.some(p => p.group) && !confirm('기존 조 편성을 모두 새로 배정합니다. 레인 배정도 초기화됩니다. 계속할까요?')) return;
         const g = Lanes.assignGroups(d.players.filter(p => !p.events || p.events.individual !== false), s.groups);
@@ -947,6 +985,13 @@
     const nums = k => v(k).split(',').map(x => num(x.trim())).filter(x => x > 0);
     switch (f.dataset.form) {
       case 'save-region': { const r = await run(async () => { d.regions = await Store.saveRegion({ id: f.dataset.id || '', name: v('name'), leader: v('leader'), note: v('note') }); return true; }, '저장되었습니다.'); if (r) { state.editRegion = null; render(); } return; }
+      case 'snap-save': {
+        if (!(await guardDirty())) return;
+        const snap = { id: Store.uid('snap'), name: v('name').trim() || '이름 없음', at: new Date().toISOString(), summary: assignSummary(d),
+          players: d.players.map(p => ({ id: p.id, group: p.group || '', lane: p.lane === undefined ? '' : p.lane, pos: p.pos === undefined ? '' : p.pos })), teams: d.teams.map(t => ({ id: t.id, lane: t.lane || '' })) };
+        const list = [snap].concat(s.assignSnapshots || []).slice(0, 10);
+        const r = await run(() => saveSnapshots(list), `"${snap.name}" 으로 저장했습니다.`); if (r) { f.reset(); render(); } return;
+      }
       case 'fin-fees': { const r = await Finance.onFeesSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
       case 'fin-pools': { const r = await Finance.onPoolsSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
       case 'fin-line': { const r = await Finance.onLineSubmit(f, state, { run, toast, save: fin => Store.saveFinance(fin) }); if (r) render(); return; }
