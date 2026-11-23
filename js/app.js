@@ -1019,7 +1019,20 @@
     const d = state.data; const s = S();
     const nums = k => v(k).split(',').map(x => num(x.trim())).filter(x => x > 0);
     switch (f.dataset.form) {
-      case 'save-region': { const r = await run(async () => { d.regions = await Store.saveRegion({ id: f.dataset.id || '', name: v('name'), leader: v('leader'), note: v('note'), guest: chk('guest') }); return true; }, '저장되었습니다.'); if (r) { state.editRegion = null; render(); } return; }
+      case 'save-region': {
+        const old = f.dataset.id ? regionById(f.dataset.id) : null; const newName = v('name').trim();
+        const r = await run(async () => {
+          d.regions = await Store.saveRegion({ id: f.dataset.id || '', name: newName, leader: v('leader'), note: v('note'), guest: chk('guest') });
+          // 지역명이 바뀌면 '지역명+번호' 형태의 팀 이름도 따라 바꾼다 (예: 아르케존1 → 일산1)
+          if (old && old.name && old.name !== newName) {
+            const re = new RegExp('^' + old.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            const list = d.teams.filter(t => t.regionId === old.id && re.test(t.name || '')).map(t => ({ id: t.id, name: t.name.replace(re, newName + '$1') }));
+            if (list.length) { d.teams = await Store.saveTeams(list); toast(`팀 이름 ${list.length}개를 ${newName}1, ${newName}2… 로 바꿨습니다.`); }
+          }
+          return true;
+        }, '저장되었습니다.');
+        if (r) { state.editRegion = null; render(); } return;
+      }
       case 'snap-save': {
         if (!(await guardDirty())) return;
         const snap = { id: Store.uid('snap'), name: v('name').trim() || '이름 없음', at: new Date().toISOString(), summary: assignSummary(d),
