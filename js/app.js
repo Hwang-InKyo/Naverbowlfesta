@@ -1064,6 +1064,7 @@
     if (k === 'rank-group') { state.rankGroup = el.value; return render(); }
     if (k === 'rec-group') { state.recGroup = el.value; return render(); }
     if (k === 'fin-side-group') { state.finSideGroup = el.value; return render(); }
+    if (k === 'fin-absent') { await Finance.onAbsentChange(el, state, { run, toast, save: f => Store.saveFinance(f) }); return; }
     if (k === 'fin-pay') { await Finance.onPaymentChange(el, state, { run, toast, save: f => Store.saveFinance(f) }); if (el.dataset.field === 'formTotal') render(); return; }
     if (k === 'rec-region') { state.recRegion = el.value; return render(); }
     if (k === 'players-region') { state.playersRegion = el.value; return render(); }

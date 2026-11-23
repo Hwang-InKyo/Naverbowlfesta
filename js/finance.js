@@ -8,6 +8,7 @@
  *   goodsDonations [{ id, name, item }]        행운상 물품 찬조
  *   expenses    [{ id, category, label, amount }]  상품비·물품 등 지출 (게임비는 자동 계산)
  *   payments    { [regionId]: { form, formCounts, formIssues, paid, paidAt, confirmed, note } }
+ *   absentClubs [{ id, name, absenceFee, donation, paid, paidAt, confirmed, note }]  불참 클럽: 불참비·찬조금 (수입), 입금 확인 대상
  *   pools       { champ: { basis, prizes[] }, side: { basis, prizes[] } }  내기 순위 기준(total|scratch)과 순위별 상금
  *  정산서의 참가비 수입은 등록된 명단(인원·지역 수)에 단가를 곱해 계산한다.
  *  챔프전·사이드(내기)는 정산서에 넣지 않고 '챔프전 · 사이드' 탭에서 판돈·상금·잔액을 따로 관리한다.
@@ -198,10 +199,20 @@ const Finance = (() => {
         <td><input type="checkbox" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="confirmed" ${pay.confirmed ? 'checked' : ''} title="입금 확인"></td>
         <td class="left small"><input type="text" class="sm" data-change="fin-pay" data-region="${esc(x.region.id)}" data-field="note" value="${esc(pay.note || '')}" placeholder="비고">${issues.length ? `<div class="form-error" style="text-align:left;margin-top:3px">${issues.map(esc).join('<br>')}</div>` : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="10" class="empty">등록된 지역이 없습니다. 선수 탭에서 신청서를 올리면 여기에 나타납니다.</td></tr>';
-    return `<div class="card"><h2>지역별 입금 확인 <span class="muted" style="font-weight:500;color:var(--text-3)">확인 ${confirmed}/${rows.length} · 입금 합계 ${won(paidSum)}원 / 계산 ${won(expectedSum)}원</span>
+    const absent = fin.absentClubs || [];
+    const absentTrs = absent.map(c => {
+      const exp = num(c.absenceFee) + num(c.donation); expectedSum += exp; const paid = num(c.paid); paidSum += paid; if (c.confirmed) confirmed++;
+      const detail = [c.absenceFee ? `불참비 ${won(c.absenceFee)}` : '', c.donation ? `찬조금 ${won(c.donation)}` : ''].filter(Boolean).join(' + ');
+      return `<tr class="${c.confirmed ? 'paid' : ''}"><td class="left"><b>${esc(c.name)}</b> <span class="badge guest-badge">불참</span></td><td>-</td><td class="small">${detail || '-'}</td><td class="right muted">-</td><td class="right">${won(exp)}</td><td>-</td>
+        <td><input type="number" class="sm" data-change="fin-absent" data-id="${esc(c.id)}" data-field="paid" value="${c.paid != null ? esc(c.paid) : ''}" placeholder="입금액"></td>
+        <td><input type="date" class="sm" data-change="fin-absent" data-id="${esc(c.id)}" data-field="paidAt" value="${esc(c.paidAt || '')}"></td>
+        <td><input type="checkbox" data-change="fin-absent" data-id="${esc(c.id)}" data-field="confirmed" ${c.confirmed ? 'checked' : ''} title="입금 확인"></td>
+        <td class="left small"><input type="text" class="sm" data-change="fin-absent" data-id="${esc(c.id)}" data-field="note" value="${esc(c.note || '')}" placeholder="비고"></td></tr>`;
+    }).join('');
+    return `<div class="card"><h2>지역별 입금 확인 <span class="muted" style="font-weight:500;color:var(--text-3)">확인 ${confirmed}/${rows.length + absent.length} · 입금 합계 ${won(paidSum)}원 / 계산 ${won(expectedSum)}원</span>
         <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#fin-pay-table" data-name="입금확인">CSV</button></span></h2>
-      <p class="muted small mb">구성 = 사이드·챔프전·스카치·베이커 수. 신청서 금액 = 업로드한 신청서의 참가비 내역 총액(없으면 칸에 총액을 직접 입력해도 됨). 계산 금액 = 등록된 명단 × 항목·단가(개인 ${won(fees.individual)}${fees.champ ? ` · 챔프전 ${won(fees.champ)}` : ''}${fees.side ? ` · 사이드 ${won(fees.side)}` : ''} · 클럽 ${won(fees.club)} · 찬조금 ${won(fees.clubDonation)}${fees.team5 ? ` · 5인조 ${won(fees.team5)}` : ''}). 입금액·입금일·확인은 입력 즉시 저장됩니다.</p>
-      <div class="table-scroll"><table class="tbl" id="fin-pay-table"><thead><tr><th class="left">지역</th><th>인원</th><th>구성</th><th>신청서 금액</th><th>계산 금액</th><th>차이</th><th>입금액</th><th>입금일</th><th>확인</th><th class="left">비고 · 확인 사항</th></tr></thead><tbody>${trs}</tbody></table></div>
+      <p class="muted small mb">불참 클럽(불참비·찬조금)은 "항목 · 단가" 탭에서 추가하면 아래에 함께 나옵니다. 구성 = 사이드·챔프전·스카치·베이커 수. 신청서 금액 = 업로드한 신청서의 참가비 내역 총액(없으면 칸에 총액을 직접 입력해도 됨). 계산 금액 = 등록된 명단 × 항목·단가(개인 ${won(fees.individual)}${fees.champ ? ` · 챔프전 ${won(fees.champ)}` : ''}${fees.side ? ` · 사이드 ${won(fees.side)}` : ''} · 클럽 ${won(fees.club)} · 찬조금 ${won(fees.clubDonation)}${fees.team5 ? ` · 5인조 ${won(fees.team5)}` : ''}). 입금액·입금일·확인은 입력 즉시 저장됩니다.</p>
+      <div class="table-scroll"><table class="tbl" id="fin-pay-table"><thead><tr><th class="left">지역</th><th>인원</th><th>구성</th><th>신청서 금액</th><th>계산 금액</th><th>차이</th><th>입금액</th><th>입금일</th><th>확인</th><th class="left">비고 · 확인 사항</th></tr></thead><tbody>${trs}${absentTrs}</tbody></table></div>
       ${fin.account ? `<p class="small muted mt">입금계좌: ${esc(fin.account)}</p>` : ''}</div>`;
   }
 
@@ -212,6 +223,7 @@ const Finance = (() => {
     if (fees.club) income.push({ cat: '클럽비용', label: '클럽별 비용', qty: tot.regions, unit: fees.club });
     if (fees.clubDonation) income.push({ cat: '클럽찬조금', label: '클럽별 찬조금', qty: tot.regions, unit: fees.clubDonation });
     if (fees.team5) income.push({ cat: '5인조', label: '5인조', qty: tot.regions, unit: fees.team5 });
+    (fin.absentClubs || []).forEach(c => { if (num(c.absenceFee)) income.push({ cat: '불참', label: `${c.name} 불참비`, qty: 1, unit: num(c.absenceFee) }); if (num(c.donation)) income.push({ cat: '불참', label: `${c.name} 찬조금`, qty: 1, unit: num(c.donation) }); });
     income.forEach(i => { i.amount = i.qty * i.unit; });
     const feeTotal = income.reduce((a, i) => a + i.amount, 0);
     const cashTotal = fin.cashDonations.reduce((a, x) => a + num(x.amount), 0);
@@ -267,6 +279,7 @@ const Finance = (() => {
         <button class="btn btn-small btn-primary" type="submit">저장</button></form></div>
       ${lines('cash', '개인 현금 찬조', [['name', '이름', 'text', true], ['amount', '금액', 'number', true]], fin.cashDonations, x => `<td class="left">${esc(x.name)}</td><td class="left">${won(x.amount)}</td>`)}
       ${lines('goods', '행운상 물품 찬조', [['name', '이름', 'text', true], ['item', '물품', 'text', true]], fin.goodsDonations, x => `<td class="left">${esc(x.name)}</td><td class="left">${esc(x.item)}</td>`)}
+      ${lines('absent', '불참 클럽 (불참비 · 찬조금)', [['name', '클럽(지역)', 'text', true], ['absenceFee', '불참비', 'number', false], ['donation', '찬조금', 'number', false]], fin.absentClubs || [], x => `<td class="left">${esc(x.name)}</td><td class="left">${won(x.absenceFee)}</td><td class="left">${won(x.donation)}</td>`)}
       ${lines('expense', '지출 (상품비 · 물품 등, 게임비 제외)', [['category', '항목 (시상/음식/행운상/물품/레인)', 'text', true], ['label', '내용', 'text', false], ['amount', '금액', 'number', true]], fin.expenses, x => `<td class="left">${esc(x.category)}</td><td class="left">${esc(x.label)}</td><td class="left">${won(x.amount)}</td>`)}`;
   }
 
@@ -279,6 +292,14 @@ const Finance = (() => {
     try { state.finance = await ctx.save(fin); if (field === 'confirmed') ctx.toast(el.checked ? '입금 확인 완료로 표시했습니다.' : '확인을 해제했습니다.'); }
     catch (e) { ctx.toast('저장 실패: ' + e.message, true); }
     const tr = el.closest('tr'); if (tr) tr.classList.toggle('paid', !!(state.finance.payments[id] || {}).confirmed);
+  }
+  async function onAbsentChange(el, state, ctx) {
+    const fin = state.finance; const c = (fin.absentClubs || []).find(x => x.id === el.dataset.id); if (!c) return;
+    const field = el.dataset.field;
+    c[field] = field === 'confirmed' ? el.checked : field === 'paid' ? (el.value === '' ? null : num(el.value)) : el.value;
+    if (field === 'confirmed' && el.checked) c.confirmedAt = new Date().toISOString();
+    try { state.finance = await ctx.save(fin); } catch (e) { ctx.toast('저장 실패: ' + e.message, true); }
+    const tr = el.closest('tr'); if (tr) tr.classList.toggle('paid', !!c.confirmed);
   }
   async function onFeesSubmit(f, state, ctx) {
     const fd = new FormData(f); const fin = state.finance;
@@ -298,7 +319,8 @@ const Finance = (() => {
   async function onLineSubmit(f, state, ctx) {
     const fd = new FormData(f); const fin = state.finance; const kind = f.dataset.kind;
     const g = k => String(fd.get(k) || '').trim();
-    if (kind === 'cash') fin.cashDonations.push({ id: uid('c'), name: g('name'), amount: num(g('amount')) });
+    if (kind === 'absent') { fin.absentClubs = fin.absentClubs || []; fin.absentClubs.push({ id: uid('a'), name: g('name'), absenceFee: num(g('absenceFee')), donation: num(g('donation')), paid: null, paidAt: '', confirmed: false, note: '' }); }
+    else if (kind === 'cash') fin.cashDonations.push({ id: uid('c'), name: g('name'), amount: num(g('amount')) });
     else if (kind === 'goods') fin.goodsDonations.push({ id: uid('g'), name: g('name'), item: g('item') });
     else fin.expenses.push({ id: uid('e'), category: g('category'), label: g('label'), amount: num(g('amount')) });
     const r = await ctx.run(async () => { state.finance = await ctx.save(fin); return true; }, '추가했습니다.');
@@ -308,7 +330,7 @@ const Finance = (() => {
     const fin = state.finance;
     if (el.dataset.do === 'del-line') {
       const kind = el.dataset.kind; const id = el.dataset.id;
-      const key = kind === 'cash' ? 'cashDonations' : kind === 'goods' ? 'goodsDonations' : 'expenses';
+      const key = kind === 'cash' ? 'cashDonations' : kind === 'goods' ? 'goodsDonations' : kind === 'absent' ? 'absentClubs' : 'expenses';
       fin[key] = fin[key].filter(x => x.id !== id);
       await ctx.run(async () => { state.finance = await ctx.save(fin); return true; }, '삭제했습니다.');
       return true;
@@ -316,6 +338,6 @@ const Finance = (() => {
     return false;
   }
 
-  return { render, renderPoolsTab, stats, expectedFor, statement, champRanking, sideGame, sideSummary, assignPrizes, checkSignupFees, uploadFeeHtml, onPaymentChange, onFeesSubmit, onPoolsSubmit, onLineSubmit, onAction, FEE_LABELS };
+  return { render, renderPoolsTab, onAbsentChange, stats, expectedFor, statement, champRanking, sideGame, sideSummary, assignPrizes, checkSignupFees, uploadFeeHtml, onPaymentChange, onFeesSubmit, onPoolsSubmit, onLineSubmit, onAction, FEE_LABELS };
 })();
 if (typeof module === 'object' && module.exports) module.exports = Finance;

@@ -42,8 +42,8 @@ const Store = (() => {
   function localSave(d) { lsSet(LS.data, d); }
   function publicSettings(s) { const { adminPin, ...rest } = s; return rest; }
   function publicView(d) { return { settings: publicSettings(d.settings), regions: clone(d.regions), players: clone(d.players), teams: clone(d.teams), results: d.results ? clone(d.results) : null }; }
-  function defaultFinance() { return { fees: { individual: 35000, champ: 10000, club: 110000, clubDonation: 50000, team5: 0, side: 10000, gameFee: 4500 }, pools: { champ: { basis: 'total', prizes: [50000, 30000, 20000] }, side: { basis: 'total', prizes: [20000, 10000] } }, account: '', cashDonations: [], goodsDonations: [], expenses: [], payments: {} }; }
-  function mergeFinance(f) { const d = defaultFinance(); f = f || {}; const pools = { champ: { ...d.pools.champ, ...((f.pools || {}).champ || {}) }, side: { ...d.pools.side, ...((f.pools || {}).side || {}) } }; return { ...d, ...f, fees: { ...d.fees, ...(f.fees || {}) }, pools, cashDonations: f.cashDonations || [], goodsDonations: f.goodsDonations || [], expenses: f.expenses || [], payments: f.payments || {} }; }
+  function defaultFinance() { return { fees: { individual: 35000, champ: 10000, club: 110000, clubDonation: 50000, team5: 0, side: 10000, gameFee: 4500 }, pools: { champ: { basis: 'total', prizes: [50000, 30000, 20000] }, side: { basis: 'total', prizes: [20000, 10000] } }, account: '', cashDonations: [], goodsDonations: [], expenses: [], payments: {}, absentClubs: [] }; }
+  function mergeFinance(f) { const d = defaultFinance(); f = f || {}; const pools = { champ: { ...d.pools.champ, ...((f.pools || {}).champ || {}) }, side: { ...d.pools.side, ...((f.pools || {}).side || {}) } }; return { ...d, ...f, fees: { ...d.fees, ...(f.fees || {}) }, pools, cashDonations: f.cashDonations || [], goodsDonations: f.goodsDonations || [], expenses: f.expenses || [], payments: f.payments || {}, absentClubs: f.absentClubs || [] }; }
   function upsert(list, item, idPrefix) {
     if (!item.id) item.id = uid(idPrefix);
     const i = list.findIndex(x => x.id === item.id);

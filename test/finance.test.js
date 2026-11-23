@@ -70,3 +70,11 @@ test('sideGame: per group per game ranking with handicap; statement excludes bet
   assert.equal(stm.feeTotal, 4 * 35000 + 2 * 110000 + 2 * 50000, '사이드·챔프전 참가비는 정산서 수입에서 제외');
   assert.equal(stm.balance, stm.feeTotal + stm.cashTotal - stm.gameTotal - stm.expTotal);
 });
+
+test('absent clubs: absence fee and donation count as income and in payments', () => {
+  const st = mkState([{ id: 'p1', name: 'A', regionId: 'r1', gender: 'M', group: 'A', handicap: 0, games: [], events: {} }], { absentClubs: [{ id: 'a1', name: '속초', absenceFee: 110000, donation: 50000 }] });
+  const stm = Finance.statement(st);
+  assert.ok(stm.income.some(i => i.label === '속초 불참비' && i.amount === 110000));
+  assert.ok(stm.income.some(i => i.label === '속초 찬조금' && i.amount === 50000));
+  assert.equal(stm.feeTotal, 1 * 35000 + 2 * 110000 + 2 * 50000 + 160000);
+});

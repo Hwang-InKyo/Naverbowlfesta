@@ -169,7 +169,7 @@ function resetAll(d, keepSettings) {
   if (pin) d.settings.adminPin = pin;
   d.regions = []; d.players = []; d.teams = []; d.results = null;
   const f = d.finance || {};
-  d.finance = keepSettings ? { fees: f.fees || {}, pools: f.pools || {}, account: f.account || '', cashDonations: [], goodsDonations: [], expenses: [], payments: {} } : null;
+  d.finance = keepSettings ? { fees: f.fees || {}, pools: f.pools || {}, account: f.account || '', cashDonations: [], goodsDonations: [], expenses: [], payments: {}, absentClubs: [] } : null;
   d.__dirty = true; return { ok: true };
 }
 function importAll(d, src) {
