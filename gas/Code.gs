@@ -25,7 +25,7 @@ const H = {
   settings: ['키', '값'],
   regions: ['ID', '이름', '대표', '비고', '게스트'],
   players: ['ID', '이름', '지역ID', '성별', '생년', '핸디', '가감', '대표', '조', '레인', '순번', '게임', '종목', '비고'],
-  teams: ['ID', '종목', '지역ID', '팀명', '선수', '레인', '핸디', '가감', '게임'],
+  teams: ['ID', '종목', '지역ID', '팀명', '선수', '레인', '핸디', '가감', '게임', '순번'],
   results: ['키', '데이터']
 };
 const TOKEN_TTL_SEC = 12 * 60 * 60;
@@ -207,9 +207,9 @@ function replacePlayers(ss, list) {
 
 // ===== 팀 =====
 function getTeams(ss) {
-  return rows(ss, 'teams').map(r => ({ id: str(r[0]), event: str(r[1]), regionId: str(r[2]), name: str(r[3]), members: parseJson(r[4], []), lane: r[5] === '' ? '' : Number(r[5]) || '', handicap: Number(r[6]) || 0, adjust: Number(r[7]) || 0, games: parseJson(r[8], []) }));
+  return rows(ss, 'teams').map(r => ({ id: str(r[0]), event: str(r[1]), regionId: str(r[2]), name: str(r[3]), members: parseJson(r[4], []), lane: r[5] === '' ? '' : Number(r[5]) || '', handicap: Number(r[6]) || 0, adjust: Number(r[7]) || 0, games: parseJson(r[8], []), pos: r[9] === '' || r[9] == null ? '' : Number(r[9]) || '' }));
 }
-function teamRow(t) { return [t.id, t.event || '', t.regionId || '', t.name || '', JSON.stringify(t.members || []), t.lane === '' || t.lane == null ? '' : Number(t.lane), Number(t.handicap) || 0, Number(t.adjust) || 0, JSON.stringify(t.games || [])]; }
+function teamRow(t) { return [t.id, t.event || '', t.regionId || '', t.name || '', JSON.stringify(t.members || []), t.lane === '' || t.lane == null ? '' : Number(t.lane), Number(t.handicap) || 0, Number(t.adjust) || 0, JSON.stringify(t.games || []), t.pos === '' || t.pos == null ? '' : Number(t.pos)]; }
 function saveTeams(ss, list) {
   const sheet = sheetOf(ss, 'teams');
   const existing = getTeams(ss);

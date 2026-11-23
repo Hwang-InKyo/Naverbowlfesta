@@ -53,7 +53,9 @@ test('assignLanes overflows gracefully when lanes are short', () => {
 test('assignTeamLanes interleaves regions', () => {
   const teams = [{ id: 'a', regionId: 'r1' }, { id: 'b', regionId: 'r1' }, { id: 'c', regionId: 'r2' }, { id: 'd', regionId: 'r2' }];
   const a = L.assignTeamLanes(teams, [1, 2], 2);
-  assert.equal(Object.keys(a).length, 4);
+  assert.equal(Object.keys(a).filter(k => !k.endsWith(':pos')).length, 4);
+  const posIn = lane => ['a', 'b', 'c', 'd'].filter(id => a[id] === lane).map(id => a[id + ':pos']).sort();
+  assert.deepEqual(posIn(1), [1, 2], '테이블마다 순번 1, 2'); assert.deepEqual(posIn(2), [1, 2]);
   assert.notEqual(a.a, a.b); // 같은 지역 두 팀은 다른 레인
   assert.notEqual(a.c, a.d);
 });

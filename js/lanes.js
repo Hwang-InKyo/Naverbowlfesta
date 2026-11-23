@@ -78,7 +78,7 @@
       const cand = (noSame.length ? noSame : pool).sort((a, b) => a.teams.length - b.teams.length || a.lane - b.lane);
       cand[0].teams.push(t);
     });
-    slots.forEach(s => s.teams.forEach(t => { result[t.id] = s.lane; }));
+    slots.forEach(s => s.teams.forEach((t, i) => { result[t.id] = s.lane; result[t.id + ':pos'] = i + 1; }));
     return result;
   }
 

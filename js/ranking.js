@@ -155,7 +155,7 @@
       return {
         teamId: t.id, event, regionId: t.regionId, regionName: region.name || '(미정)',
         name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
-        lane: t.lane || '', handicap, included, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
+        lane: t.lane || '', pos: t.pos || '', handicap, included, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
         valid: members.length === EVENTS[event].size, isGuest: !!region.guest
       };

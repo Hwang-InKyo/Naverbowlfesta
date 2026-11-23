@@ -148,7 +148,7 @@ function replacePlayers(d, list) {
 }
 function normTeam(t) {
   return { id: t.id, event: t.event || '', regionId: t.regionId || '', name: t.name || '', members: Array.isArray(t.members) ? t.members : [],
-    lane: t.lane === '' || t.lane == null ? '' : Number(t.lane) || '', handicap: Number(t.handicap) || 0, adjust: Number(t.adjust) || 0, games: Array.isArray(t.games) ? t.games : [] };
+    lane: t.lane === '' || t.lane == null ? '' : Number(t.lane) || '', pos: t.pos === '' || t.pos == null ? '' : Number(t.pos) || '', handicap: Number(t.handicap) || 0, adjust: Number(t.adjust) || 0, games: Array.isArray(t.games) ? t.games : [], note: t.note || '' };
 }
 function replaceTeams(d, regionId, event, list) {
   d.teams = d.teams.filter(t => !(t.regionId === regionId && t.event === event));
