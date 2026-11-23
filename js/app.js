@@ -651,7 +651,10 @@
       table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
       th, td { border: 1px solid #bbb; padding: 2px 4px; vertical-align: top; text-align: left; overflow: hidden; }
       .tl { border-left: 2.5px solid #222; } .tr { border-right: 2.5px solid #222; } th { border-top: 2.5px solid #222; } tr.last td { border-bottom: 2.5px solid #222; }
-      th { background: #eee; text-align: center; font-size: ${fs + 1}px; padding: 5px 4px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
+      /* 레인 색: 테이블의 왼쪽 레인은 주황 계열, 오른쪽 레인은 파랑 계열. 머리글은 더 진하게 */
+      th.tl { background: #F6D9C4; } th.tr { background: #CFE0F5; } td.tl { background: #FDF3EC; } td.tr { background: #EEF4FC; }
+      th, td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      th { text-align: center; font-size: ${fs + 1}px; padding: 5px 4px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
       td b { color: #c2410c; font-size: ${fs - 1}px; margin-right: 4px; } td .nm { white-space: nowrap; font-weight: 700; font-size: ${fs + 2}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.2; }
       table.lanes + table.lanes { margin-top: 5mm; } tbody tr { height: var(--rowh, 20mm); } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
       <body><div class="toolbar"><button onclick="window.print()">인쇄</button> A4 가로 · 한 줄에 8레인, 8레인이 넘으면 두 줄 · 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''}</div>${sections.map(sectionHtml).join('')}</body></html>`;
