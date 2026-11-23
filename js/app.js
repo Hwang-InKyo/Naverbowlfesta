@@ -630,7 +630,8 @@
       const PER_PAGE = 8; const pages = []; for (let i = 0; i < all.length; i += PER_PAGE) pages.push(all.slice(i, i + PER_PAGE));
       // 8레인 블록을 같은 장에 위아래로 쌓는다 (16레인 = 두 줄). 블록 수에 맞춰 행 높이를 줄인다
       // 쓸 수 있는 높이 ≈ 190mm(A4 가로, 여백 10mm) − 제목 12mm − 블록당 머리글·간격 14mm
-      const rowH = Math.min(30, Math.max(11, (178 - pages.length * 14) / (pages.length * maxPos)));
+      // 칸 높이는 내용에 맞게 낮게(최대 15mm). 줄·순번이 많으면 한 장에 맞도록 9mm 까지 줄인다
+      const rowH = Math.min(15, Math.max(9, (178 - pages.length * 14) / (pages.length * maxPos)));
       const blocks = pages.map(ls => {
         let t = `<table class="lanes" style="--rowh:${rowH}mm"><thead><tr>${ls.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
         for (let p = 1; p <= maxPos; p++) t += `<tr>${ls.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b><span class="nm">${esc2(r.label)}</span><small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
@@ -645,9 +646,9 @@
       section { page-break-after: always; padding: 0; } table.lanes { page-break-inside: avoid; } section:last-child { page-break-after: auto; }
       h1 { font-size: 16px; margin: 0 0 6px; } h1 .sub, p.sub { font-size: 11px; font-weight: 400; color: #555; margin-left: 8px; }
       table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
-      th, td { border: 1px solid #999; padding: 3px 4px; vertical-align: top; text-align: left; overflow: hidden; }
+      th, td { border: 1px solid #999; padding: 2px 4px; vertical-align: top; text-align: left; overflow: hidden; }
       th { background: #eee; text-align: center; font-size: ${fs + 1}px; padding: 5px 4px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
-      td b { color: #c2410c; display: block; font-size: ${fs - 1}px; } td .nm { display: block; white-space: nowrap; font-weight: 700; font-size: ${fs + 3}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.25; margin-top: 1px; }
+      td b { color: #c2410c; font-size: ${fs - 1}px; margin-right: 4px; } td .nm { white-space: nowrap; font-weight: 700; font-size: ${fs + 2}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.2; }
       table.lanes + table.lanes { margin-top: 5mm; } tbody tr { height: var(--rowh, 20mm); } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
       <body><div class="toolbar"><button onclick="window.print()">인쇄</button> A4 가로 · 한 줄에 8레인, 8레인이 넘으면 두 줄 · 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''}</div>${sections.map(sectionHtml).join('')}</body></html>`;
     const w = window.open('', '_blank'); if (!w) return toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.', true);
