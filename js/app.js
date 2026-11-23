@@ -270,8 +270,8 @@
     const genderRows = p.gender === 'F' ? res.female : res.male; const gr = genderRows.find(r => r.playerId === p.id);
     const teamOf = ev => d.teams.find(t => t.event === ev && (t.members || []).includes(p.id));
     const teamRow = (ev, t) => t ? res[ev].find(r => r.teamId === t.id) : null;
-    const evRow = (ev, on, title, sub) => `<div class="ev-row ${on ? '' : 'off'}"><div class="ic">${{ individual: '개인', scotch: '스카', baker: '베이' }[ev]}</div><div><div class="t">${title}</div><div class="d">${sub}</div></div>${on ? ICON.check : ''}</div>`;
-    const sc = teamOf('scotch'), bk = teamOf('baker');
+    const evRow = (ev, on, title, sub) => `<div class="ev-row ${on ? '' : 'off'}"><div class="ic">${{ individual: '개인', scotch: '스카', baker: '베이', team5: '5인' }[ev]}</div><div><div class="t">${title}</div><div class="d">${sub}</div></div>${on ? ICON.check : ''}</div>`;
+    const sc = teamOf('scotch'), bk = teamOf('baker'), t5 = teamOf('team5');
     const partner = t => (t.members || []).filter(id => id !== p.id).map(id => (playerById(id) || {}).name).filter(Boolean).join(', ');
     const ind = !p.events || p.events.individual !== false;
     html += `<div class="section-label">검색 결과</div>
@@ -280,6 +280,7 @@
       <div class="card stack" style="margin:0"><h2 style="margin:0">참가 종목</h2>
         ${evRow('individual', ind, ind ? `개인전${g ? ' · ' + esc(g.name) : ''}` : '개인전', ind ? `${esc(groupDate(g)) || '조 미편성'}${row && row.lane ? ` · 레인 ${tablePos(row)}` : ''}${g && g.bonus ? ` · 조 보너스 +${g.bonus} (총점 1회)` : ''}` : '미신청')}
         ${evRow('scotch', !!sc, sc ? `스카치 더블 · ${esc(sc.name || partner(sc))}${sc.name ? ` (${esc(partner(sc))})` : ''}` : '스카치 더블', sc ? `${sc.lane ? `레인 ${tablePos(sc, 'team')}` : '레인 미배정'} · 팀 핸디 ${num(sc.handicap)}${num(sc.adjust) ? ` · 가감 ${num(sc.adjust)}` : ''}` : '미신청')}
+        ${t5 ? evRow('team5', true, `5인조 · ${esc(t5.name || '')}${partner(t5) ? ` (${esc(partner(t5))})` : ''}`, `${t5.lane ? `레인 ${tablePos(t5, 'team')}` : '레인 미배정'} · 배정만 (점수 집계 없음)`) : ''}
         ${evRow('baker', !!bk, bk ? `베이커 · ${esc(bk.name || partner(bk))}${bk.name ? ` (${esc(partner(bk))})` : ''}` : '베이커', bk ? `${bk.lane ? `레인 ${tablePos(bk, 'team')}` : '레인 미배정'} · 팀 핸디 ${num(bk.handicap)}${num(bk.adjust) ? ` · 가감 ${num(bk.adjust)}` : ''}` : '미신청')}
       </div>
       <div class="card" style="margin:0"><h2 style="margin-bottom:10px">핸디 정보</h2>
@@ -295,7 +296,7 @@
 
   function renderPublicAssign() {
     const s = S(); const d = state.data;
-    const subs = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커']]);
+    const subs = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커'], ['team5', '5인조']]);
     if (!subs.some(x => x[0] === state.pubAssignSub)) state.pubAssignSub = subs[0][0];
     const q = state.pubAssignQ.trim();
     // 이름 검색 시 해당 선수의 조로 자동 전환
@@ -606,7 +607,7 @@
 
   function renderAssign() {
     const s = S(); const d = state.data;
-    const items = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커']]);
+    const items = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커'], ['team5', '5인조']]);
     if (!items.some(i => i[0] === state.assignSub)) state.assignSub = items[0][0];
     let html = subtabs(items, state.assignSub, 'assign-sub', 'sub');
     if (isAdmin()) html += renderAssignSnapshots();
@@ -642,16 +643,16 @@
     if (isAdmin()) {
       const reg = state.teamRegion || (d.regions[0] && d.regions[0].id) || '';
       const inTeam = new Set(d.teams.filter(t => t.event === event).flatMap(t => t.members));
-      const cands = d.players.filter(p => p.regionId === reg && !inTeam.has(p.id) && (!p.events || p.events[event])).sort((a, b) => a.gender.localeCompare(b.gender) || a.name.localeCompare(b.name, 'ko'));
-      const hint = event === 'scotch' ? '남 1명 + 여 1명' : '3명';
-      html += `<div class="card"><h2>${ev.name} 팀 만들기</h2><p class="muted small mb">팀 구성: ${hint} · 해당 종목에 출전 신청한 선수만 표시됩니다.</p>
+      const cands = d.players.filter(p => p.regionId === reg && !inTeam.has(p.id) && (event === 'team5' || !p.events || p.events[event])).sort((a, b) => a.gender.localeCompare(b.gender) || a.name.localeCompare(b.name, 'ko'));
+      const hint = event === 'scotch' ? '남 1명 + 여 1명' : event === 'team5' ? '최대 5명 · 지역별 1팀 (점수 집계 없음, 배정만)' : '3명';
+      html += `<div class="card"><h2>${ev.name} 팀 만들기</h2><p class="muted small mb">팀 구성: ${hint}${event === 'team5' ? '' : ' · 해당 종목에 출전 신청한 선수만 표시됩니다.'}</p>${event === 'team5' ? `<div class="row mb"><button class="btn btn-small btn-secondary" data-action="team5-auto">지역별 5인조 팀 자동 생성 (${d.regions.filter(r => !d.teams.some(t => t.event === 'team5' && t.regionId === r.id)).length}개 지역)</button><span class="small muted">지역마다 팀 하나를 만듭니다. 팀원은 아래에서 골라 넣거나 비워 둬도 됩니다.</span></div>` : ''}
         <div class="form-row"><div class="form-group"><label>지역</label><select data-change="team-region">${regionOptions(reg)}</select></div><div class="form-group"><label>팀명 (비우면 지역명+번호, 예: 서울1)</label><input type="text" id="team-name" placeholder="예: 서울1"></div><div class="form-group"><label>팀 핸디 (게임당)</label><input type="number" id="team-handicap" value="0"></div><div class="form-group"><label>총점 가감</label><input type="number" id="team-adjust" value="0"></div></div>
         <p class="muted small mb">규정 예: 베이커 여자 1명 +3, 2명 이상 +5 · 장애인 +3 · 프로 -3 (게임당, 핸디에 합산해 입력)</p>
         <div class="checkbox-grid">${cands.map(p => `<label class="checkbox-item"><input type="checkbox" class="team-cb" value="${esc(p.id)}" data-gender="${p.gender}"> ${esc(p.name)} <small>${p.gender === 'F' ? '여' : '남'}${p.handicap ? ' · 핸디 ' + p.handicap : ''}</small></label>`).join('') || '<span class="muted small">선택 가능한 선수가 없습니다.</span>'}</div>
         <div class="row mt"><button class="btn btn-small btn-primary" data-action="add-team" data-event="${event}">팀 등록</button>
         <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="${event}">테이블 자동 배정</button>
         <button class="btn btn-small btn-outline" data-action="rename-teams" data-event="${event}" title="모든 팀 이름을 지역명+번호(청주1, 청주2…)로 다시 붙입니다">팀명 재생성 (지역명+번호)</button>
-        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
+        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' || event === 'team5' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${ev.name} 팀 (${rows.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-assign-table" data-name="${ev.name}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
@@ -972,6 +973,11 @@
       }
       case 'fin-sub': state.finSub = el.dataset.sub; return render();
       case 'fin-action': { const r = await Finance.onAction(el, state, { run, toast, confirm: m => confirm(m), save: f => Store.saveFinance(f) }); if (r !== false) render(); return; }
+      case 'team5-auto': {
+        const missing = d.regions.filter(r => !d.teams.some(t => t.event === 'team5' && t.regionId === r.id));
+        if (!missing.length) return toast('모든 지역에 5인조 팀이 있습니다.');
+        await run(async () => { d.teams = await Store.saveTeams(missing.map(r => ({ event: 'team5', regionId: r.id, name: r.name, members: [], lane: '', pos: '', handicap: 0, adjust: 0, games: [] }))); }, `${missing.length}개 지역에 5인조 팀을 만들었습니다.`); return render();
+      }
       case 'rename-teams': {
         const event = el.dataset.event; if (!(await guardDirty())) return;
         if (!confirm(`${EV[event].name} 모든 팀 이름을 지역명+번호(예: 청주1, 청주2)로 다시 붙일까요?`)) return;
@@ -982,10 +988,16 @@
       case 'add-team': {
         const ev = el.dataset.event; const ids = $$('.team-cb:checked').map(c => c.value);
         const size = EV[ev].size;
-        if (ids.length !== size) return toast(`${EV[ev].name}은(는) ${size}명을 선택해야 합니다.`, true);
+        if (EV[ev].noScore ? (ids.length < 1 || ids.length > size) : ids.length !== size) return toast(EV[ev].noScore ? `${EV[ev].name}은(는) 1~${size}명을 선택합니다.` : `${EV[ev].name}은(는) ${size}명을 선택해야 합니다.`, true);
         if (ev === 'scotch') { const gs = $$('.team-cb:checked').map(c => c.dataset.gender).sort().join(''); if (gs !== 'FM') return toast('스카치는 남 1명 + 여 1명으로 구성합니다.', true); }
         const reg = $('[data-change="team-region"]').value;
-        const autoName = `${regionName(reg)}${d.teams.filter(x => x.event === ev && x.regionId === reg).length + 1}`;
+        const t5 = ev === 'team5' ? d.teams.find(x => x.event === 'team5' && x.regionId === reg) : null;
+        if (t5) { // 5인조는 지역별 한 팀: 선택한 선수를 기존 팀에 추가
+          const members = [...new Set((t5.members || []).concat(ids))];
+          if (members.length > size) return toast(`5인조는 최대 ${size}명입니다 (현재 ${(t5.members || []).length}명).`, true);
+          await run(async () => { d.teams = await Store.saveTeams([{ ...t5, members }]); }, `${t5.name} 팀에 ${ids.length}명을 추가했습니다.`); return render();
+        }
+        const autoName = ev === 'team5' ? regionName(reg) : `${regionName(reg)}${d.teams.filter(x => x.event === ev && x.regionId === reg).length + 1}`;
         const t = { event: ev, regionId: reg, name: $('#team-name').value.trim() || autoName, members: ids, lane: '', handicap: num($('#team-handicap').value), adjust: num($('#team-adjust').value), games: Array(s.games[ev]).fill(null) };
         await run(async () => { d.teams = await Store.saveTeams([t]); }, '팀이 등록되었습니다.'); return render();
       }

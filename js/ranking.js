@@ -28,7 +28,8 @@
   const EVENTS = {
     individual: { key: 'individual', name: '개인전', games: 3, size: 1 },
     scotch: { key: 'scotch', name: '스카치 더블', games: 2, size: 2 },
-    baker: { key: 'baker', name: '베이커', games: 2, size: 3 }
+    baker: { key: 'baker', name: '베이커', games: 2, size: 3 },
+    team5: { key: 'team5', name: '5인조', games: 1, size: 5, noScore: true }   // 배정만 하고 점수·순위 집계는 하지 않음 (지역별 1팀)
   };
 
   // 네이버 볼링 동호회 가입 지역 (주최 지역 선택, 신청서 지역명 목록)
@@ -39,7 +40,7 @@
     hostRegion: '서울',          // 주최 지역 (REGION_NAMES 중 하나)
     status: 'ready', // ready | live | final
     basis: 'total',              // 개인전 순위 기준: total(핸디 포함) | scratch
-    games: { individual: 3, scotch: 2, baker: 2 },
+    games: { individual: 3, scotch: 2, baker: 2, team5: 1 },
     scoresIncludeHandicap: { individual: false, scotch: false, baker: false }, // 입력 점수에 게임당 핸디 포함 여부
     groups: [{ id: 'A', name: '1조', day: 1, time: '', bonus: 10 }, { id: 'B', name: '2조', day: 1, time: '', bonus: 0 }, { id: 'C', name: '3조', day: 2, time: '', bonus: 0 }],
     rulesNote: '개인전: 1인 3게임 총점, 매 게임 우측 4테이블 이동. 남자 1~5위, 여자 1~5위 시상.\n동점: 비핸디 → 하이/로우 → 연장자 순.\n1조(일요일 첫 경기) 총점 +10점 (1회).\n핸디(개인전, 매 게임 적용): 여성 15, 시니어(만 60세 이상) 연도별 1~5점, 최고 20점. 장애인 4급 이상 7점(사전 통보).\n스카치: 팀당 2게임, 남녀 2인(여자 초구), 여자 회원 없는 클럽 제외. 장애인 +3/게임. 1~3위 시상.\n베이커: 팀당 2게임, 여자 1명 +3, 여자 2명 이상 +5, 장애인 +3 (게임당). 1~3위 시상.\n감점: 클럽티 미착용 -10/게임, 복장 불이행 -5/게임. 프로: 개인전 총점 -21, 스카치·베이커 -3/게임.',
@@ -157,7 +158,7 @@
         name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
         lane: t.lane || '', pos: t.pos || '', handicap, included, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
-        valid: members.length === EVENTS[event].size, isGuest: !!region.guest
+        valid: EVENTS[event].noScore ? members.length <= EVENTS[event].size : members.length === EVENTS[event].size, isGuest: !!region.guest
       };
     });
   }
