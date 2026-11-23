@@ -59,3 +59,14 @@ test('assignTeamLanes interleaves regions', () => {
   assert.notEqual(a.a, a.b); // 같은 지역 두 팀은 다른 레인
   assert.notEqual(a.c, a.d);
 });
+
+test('assignLanes keeps every table within one player of each other, whatever the region mix', () => {
+  for (const [n, per, regions] of [[22, 5, 5], [21, 5, 3], [17, 4, 2], [13, 4, 1], [40, 4, 7], [9, 5, 9]]) {
+    const players = Array.from({ length: n }, (_, i) => ({ id: 'p' + i, regionId: 'r' + (i % regions) }));
+    const tables = L.laneRange(1, L.lanesNeeded(n, per));
+    const a = L.assignLanes(players, tables, per);
+    const counts = tables.map(t => Object.values(a).filter(x => x.lane === t).length);
+    assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `${n}/${per}: ${counts}`);
+    assert.ok(Math.max(...counts) <= per);
+  }
+});

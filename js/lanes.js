@@ -36,7 +36,7 @@
   /**
    * 한 조의 레인 배정.
    * players: 해당 조 선수, lanes: 사용할 테이블 번호 배열, perLane: 테이블당 인원
-   * 같은 지역 선수가 같은 레인에 겹치지 않도록 우선 배치. 반환: { playerId: { lane, pos } }
+   * 모든 테이블에 인원이 균등하도록(차이 최대 1명) 배치하고, 같은 인원이면 같은 지역 선수가 없는 테이블을 고른다. 반환: { playerId: { lane, pos } }
    */
   function assignLanes(players, lanes, perLane) {
     perLane = Math.max(1, num(perLane, 4));
@@ -49,8 +49,9 @@
     ordered.forEach(p => {
       const open = slots.filter(s => s.players.length < perLane);
       const pool = open.length ? open : slots;
-      const noSameRegion = pool.filter(s => !s.players.some(q => q.regionId === p.regionId));
-      const cand = (noSameRegion.length ? noSameRegion : pool).sort((a, b) => a.players.length - b.players.length || a.lane - b.lane);
+      // 인원이 가장 적은 테이블 우선(모든 테이블·레인에 균등), 같은 인원이면 같은 지역이 없는 테이블 우선
+      const same = s => (s.players.some(q => q.regionId === p.regionId) ? 1 : 0);
+      const cand = pool.slice().sort((a, b) => a.players.length - b.players.length || same(a) - same(b) || a.lane - b.lane);
       cand[0].players.push(p);
     });
     slots.forEach(s => s.players.forEach((p, i) => { result[p.id] = { lane: s.lane, pos: i + 1 }; }));
@@ -74,8 +75,8 @@
     ordered.forEach(t => {
       const open = slots.filter(s => s.teams.length < teamsPerLane);
       const pool = open.length ? open : slots;
-      const noSame = pool.filter(s => !s.teams.some(x => x.regionId === t.regionId));
-      const cand = (noSame.length ? noSame : pool).sort((a, b) => a.teams.length - b.teams.length || a.lane - b.lane);
+      const same = s => (s.teams.some(x => x.regionId === t.regionId) ? 1 : 0);
+      const cand = pool.slice().sort((a, b) => a.teams.length - b.teams.length || same(a) - same(b) || a.lane - b.lane);
       cand[0].teams.push(t);
     });
     slots.forEach(s => s.teams.forEach((t, i) => { result[t.id] = s.lane; result[t.id + ':pos'] = i + 1; }));
