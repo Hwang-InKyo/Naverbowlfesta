@@ -41,6 +41,19 @@
   const searchBox = (attr, value, placeholder, light) => `<label class="search-box ${light ? 'light' : ''}">${ICON.search.replace('width="21" height="21"', 'width="17" height="17"')}<input type="text" data-input="${attr}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off" aria-label="${esc(placeholder)}"></label>`;
   const view = () => (isAdmin() && !state.previewPublic) ? 'admin' : 'public';
   const tableLanes = t => t ? `${2 * num(t) - 1}·${2 * num(t)}레인` : '';
+  /** 설정의 레인 수로 정한 최대 테이블 번호 (레인 ÷ 2). 0 이면 제한 없음 */
+  const maxTable = () => Math.floor(num(S().lanes) / 2);
+  /** 자동 배정 전 범위 검사: 시작 테이블 + 필요 테이블 수가 볼링장 테이블 수를 넘으면 안내하고 false */
+  function checkTableRange(from, needed, count, per, unit) {
+    const max = maxTable(); if (!max) return true;
+    const last = from + needed - 1;
+    if (from > max) { toast(`시작 테이블 ${from}번이 볼링장 테이블 수(${max}개, ${num(S().lanes)}레인)를 넘습니다.`, true); return false; }
+    if (last > max) {
+      const minPer = Math.ceil(count / (max - from + 1));
+      toast(`${count}${unit}을 테이블당 ${per}${unit}으로 나누면 ${from}~${last}번 테이블이 필요해 볼링장 테이블 수(${max}개)를 넘습니다. 테이블당 ${minPer}${unit} 이상으로 하거나 시작 테이블을 앞당기세요.`, true); return false;
+    }
+    return true;
+  }
   /** 테이블(lane)·테이블 내 순번(pos) → 실제 레인과 레인 내 순번. 테이블 인원의 앞 절반(올림)은 왼쪽 레인(2t-1), 나머지는 오른쪽 레인(2t).
    *  예: 1번 테이블 5명 → 1-1, 1-2, 1-3, 2-1, 2-2 */
   function laneOf(r, kind) {
@@ -596,7 +609,7 @@
         <p class="small mb">전체 ${d.players.length}명 · 미편성 ${unassigned}명 · ${s.groups.map(x => x.name + ' ' + d.players.filter(p => p.group === x.id).length + '명').join(' · ')}</p>
         <div class="row mb"><button class="btn btn-small btn-secondary" data-action="auto-groups">전체 조 자동 편성 (지역별 균등)</button></div>
         <div class="form-row"><div class="form-group"><label>시작 테이블</label><input type="number" id="lane-from" value="${s.tableFrom || 1}"></div><div class="form-group"><label>테이블당 인원</label><input type="number" id="per-lane" value="${s.perTable || 4}"></div><div class="form-group" style="flex:0;align-self:flex-end"><button class="btn btn-small btn-primary" data-action="auto-lanes" data-group="${esc(g.id)}">${esc(g.name)} 테이블 자동 배정</button></div></div>
-        <p class="muted small">테이블 1개는 좌우 2레인(1번 테이블 = 1·2레인)을 씁니다. 같은 지역 선수가 같은 테이블에 겹치지 않도록 배정하며, 아래 표에서 조·테이블·순번을 직접 고친 뒤 <b>저장</b>을 누르세요.</p></div>`;
+        <p class="muted small">볼링장 ${num(s.lanes)}레인 = 테이블 ${maxTable()}개 (설정에서 변경). 테이블 1개는 좌우 2레인(1번 테이블 = 1·2레인)을 씁니다. 같은 지역 선수가 같은 테이블에 겹치지 않도록 배정하며, 아래 표에서 조·테이블·순번을 직접 고친 뒤 <b>저장</b>을 누르세요.</p></div>`;
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${esc(g.name)} <span class="muted small">${g.day ? g.day + '일차' : ''} ${esc(g.time || '')} · ${rows.length}명</span> <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#assign-table" data-name="${esc(g.name)}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
@@ -628,7 +641,7 @@
         <div class="row mt"><button class="btn btn-small btn-primary" data-action="add-team" data-event="${event}">팀 등록</button>
         <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="${event}">테이블 자동 배정</button>
         <button class="btn btn-small btn-outline" data-action="rename-teams" data-event="${event}" title="모든 팀 이름을 지역명+번호(청주1, 청주2…)로 다시 붙입니다">팀명 재생성 (지역명+번호)</button>
-        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"></div></div>`;
+        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${ev.name} 팀 (${rows.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-assign-table" data-name="${ev.name}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
@@ -941,6 +954,7 @@
         const gid = el.dataset.group; const from = num($('#lane-from').value, 1), per = num($('#per-lane').value, 4);
         const list = d.players.filter(p => p.group === gid);
         if (!list.length) return toast('이 조에 선수가 없습니다.', true);
+        if (!checkTableRange(from, Lanes.lanesNeeded(list.length, per), list.length, per, '명')) return;
         const tables = Lanes.laneRange(from, Lanes.lanesNeeded(list.length, per));
         const a2 = Lanes.assignLanes(list, tables, per);
         const upd = list.map(p => ({ ...p, lane: a2[p.id].lane, pos: a2[p.id].pos }));
@@ -969,6 +983,7 @@
       case 'auto-team-lanes': {
         const ev = el.dataset.event; const from = num($('#team-lane-from').value, 1), per = num($('#team-per-lane').value, 1);
         const ts = d.teams.filter(t => t.event === ev); if (!ts.length) return toast('팀이 없습니다.', true);
+        if (!checkTableRange(from, Math.ceil(ts.length / per), ts.length, per, '팀')) return;
         const lanes = Lanes.laneRange(from, Math.ceil(ts.length / per));
         const a2 = Lanes.assignTeamLanes(ts, lanes, per);
         await run(async () => { d.teams = await Store.saveTeams(ts.map(t => ({ ...t, lane: a2[t.id], pos: a2[t.id + ':pos'] || '' }))); }, '테이블을 배정했습니다.'); return render();
@@ -1103,9 +1118,10 @@
       const f = el.dataset.pfield;
       p[f] = el.value === '' ? '' : (f === 'group' ? el.value : num(el.value));
       if (f === 'group') { p.lane = ''; p.pos = ''; }
+      if (f === 'lane' && maxTable() && num(p.lane) > maxTable()) toast(`${p.lane}번 테이블은 볼링장 테이블 수(${maxTable()}개)를 넘습니다.`, true);
       return markDirty('player', p.id);
     }
-    if (el.dataset.tfield) { const t = teamById(el.dataset.id); if (!t) return; t[el.dataset.tfield] = el.value === '' ? '' : num(el.value); return markDirty('team', t.id); }
+    if (el.dataset.tfield) { const t = teamById(el.dataset.id); if (!t) return; t[el.dataset.tfield] = el.value === '' ? '' : num(el.value); if (el.dataset.tfield === 'lane' && maxTable() && num(t.lane) > maxTable()) toast(`${t.lane}번 테이블은 볼링장 테이블 수(${maxTable()}개)를 넘습니다.`, true); return markDirty('team', t.id); }
     if (el.dataset.pscore != null) {
       const p = playerById(el.dataset.pscore); if (!p) return;
       const g = num(el.dataset.g); let val = el.value === '' ? null : Math.max(0, Math.min(300, num(el.value))); if (val != null) el.value = val;
