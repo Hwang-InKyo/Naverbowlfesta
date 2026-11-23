@@ -605,12 +605,54 @@
   }
   async function saveSnapshots(list) { const d = state.data; d.settings = { ...d.settings, ...(await Store.saveSettings({ assignSnapshots: list })) }; return true; }
 
+  /** 전체 레인 배정표를 새 창에 가로(A4 landscape)로 만들어 인쇄. 개인전 조별 / 스카치 / 베이커 / 5인조(팀이 있을 때) 각 한 장 */
+  function printLaneSheets() {
+    const s = S(); const d = state.data; const pr = Ranking.playerRows(d.players, d.regions, s);
+    const sections = [];
+    s.groups.forEach(g => {
+      const rows = pr.filter(r => r.group === g.id && r.lane);
+      sections.push({ title: `개인전 ${g.name}`, sub: groupDate(g) || '', rows: rows.map(r => ({ ...laneOf(r), label: r.name, note: r.regionName + (r.gender === 'F' ? ' · 여' : '') + (r.handicap ? ` · 핸디 ${r.handicap}` : '') })), count: rows.length, unit: '명', missing: pr.filter(r => r.group === g.id && !r.lane).length });
+    });
+    ['scotch', 'baker', 'team5'].forEach(ev => {
+      const rows = Ranking.teamRows(d.teams, ev, pr, d.regions, s);
+      if (!rows.length && ev === 'team5') return;
+      const placed = rows.filter(r => r.lane);
+      sections.push({ title: EV[ev].name, sub: ev === 'team5' ? '배정만' : `${s.games[ev]}게임`, rows: placed.map(r => ({ ...laneOf(r, 'team'), label: r.name, note: ev === 'team5' ? '' : r.memberNames.join(' · ') + (r.handicap ? ` · 핸디 ${r.handicap}` : '') })), count: placed.length, unit: '팀', missing: rows.length - placed.length });
+    });
+    const esc2 = esc;
+    const sectionHtml = sec => {
+      const lanes = [...new Set(sec.rows.map(r => r.lane).filter(Boolean))].sort((a, b) => a - b);
+      if (!lanes.length) return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)}</h1><p class="sub">배정된 ${sec.unit === '명' ? '선수' : '팀'}가 없습니다.</p></section>`;
+      const minL = lanes[0], maxL = lanes[lanes.length - 1]; const all = []; for (let l = minL; l <= maxL; l++) all.push(l);
+      const byLane = new Map(all.map(l => [l, sec.rows.filter(r => r.lane === l).sort((a, b) => a.pos - b.pos)]));
+      const maxPos = Math.max(1, ...sec.rows.map(r => r.pos || 0));
+      let t = `<table class="lanes"><thead><tr>${all.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
+      for (let p = 1; p <= maxPos; p++) t += `<tr>${all.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b> ${esc2(r.label)}<small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
+      t += '</tbody></table>';
+      return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)} <span class="sub">${esc2(sec.sub)} · ${sec.count}${sec.unit} · ${minL}~${maxL}레인${sec.missing ? ` · 미배정 ${sec.missing}${sec.unit}` : ''}</span></h1>${t}</section>`;
+    };
+    const cols = Math.max(2, ...sections.map(sec => { const ls = sec.rows.map(r => r.lane).filter(Boolean); return ls.length ? Math.max(...ls) - Math.min(...ls) + 1 : 0; }));
+    const fs = cols > 16 ? 9 : cols > 12 ? 10 : 11;
+    const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc2(s.name)} 레인 배정표</title>
+      <style>@page { size: A4 landscape; margin: 10mm; } body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; color: #111; margin: 0; }
+      section { page-break-after: always; padding: 4mm 0; } section:last-child { page-break-after: auto; }
+      h1 { font-size: 16px; margin: 0 0 6px; } h1 .sub, p.sub { font-size: 11px; font-weight: 400; color: #555; margin-left: 8px; }
+      table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
+      th, td { border: 1px solid #999; padding: 3px 4px; vertical-align: top; text-align: left; overflow: hidden; }
+      th { background: #eee; text-align: center; font-size: ${fs}px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
+      td b { color: #c2410c; margin-right: 2px; } td small { display: block; color: #555; font-size: ${fs - 2}px; }
+      tr { height: ${fs * 3.6}px; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
+      <body><div class="toolbar"><button onclick="window.print()">인쇄</button> 가로(A4) 기준, 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''} 각 한 장</div>${sections.map(sectionHtml).join('')}</body></html>`;
+    const w = window.open('', '_blank'); if (!w) return toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.', true);
+    w.document.open(); w.document.write(html); w.document.close();
+  }
+
   function renderAssign() {
     const s = S(); const d = state.data;
     const items = s.groups.map(g => [g.id, `개인전 ${g.name}`]).concat([['scotch', '스카치'], ['baker', '베이커'], ['team5', '5인조']]);
     if (!items.some(i => i[0] === state.assignSub)) state.assignSub = items[0][0];
     let html = subtabs(items, state.assignSub, 'assign-sub', 'sub');
-    if (isAdmin()) html += renderAssignSnapshots();
+    if (isAdmin()) html += `<div class="row mb no-print" style="justify-content:flex-end"><button class="btn btn-small btn-outline" data-action="print-lanes">전체 레인 배정표 인쇄 (가로)</button></div>` + renderAssignSnapshots();
     if (EV[state.assignSub]) return html + renderTeamAssign(state.assignSub);
     const g = s.groups.find(x => x.id === state.assignSub);
     const rows = Ranking.playerRows(d.players.filter(p => p.group === g.id), d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
@@ -924,6 +966,7 @@
       case 'toggle-region': state.openRegion = state.openRegion === id ? '' : id; return render();
       case 'csv': return tableCsv(el.dataset.sel, el.dataset.name);
       case 'print': return window.print();
+      case 'print-lanes': return printLaneSheets();
       case 'signup-register': { const msg = await run(() => registerSignup(num(el.dataset.i))); if (msg) toast(msg); return render(); }
       case 'signup-register-all': {
         const missing = state.uploads.filter(u => u.parsed && !u.done && !(u.regionName || '').trim());
