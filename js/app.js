@@ -43,16 +43,16 @@
   const tableLanes = t => t ? `${2 * num(t) - 1}·${2 * num(t)}레인` : '';
   /** 설정의 레인 수로 정한 최대 테이블 번호 (레인 ÷ 2). 0 이면 제한 없음 */
   const maxTable = () => Math.floor(num(S().lanes) / 2);
-  /** 자동 배정 전 범위 검사: 시작 테이블 + 필요 테이블 수가 볼링장 테이블 수를 넘으면 안내하고 false */
-  function checkTableRange(from, needed, count, per, unit) {
-    const max = maxTable(); if (!max) return true;
-    const last = from + needed - 1;
-    if (from > max) { toast(`시작 테이블 ${from}번이 볼링장 테이블 수(${max}개, ${num(S().lanes)}레인)를 넘습니다.`, true); return false; }
-    if (last > max) {
-      const minPer = Math.ceil(count / (max - from + 1));
-      toast(`${count}${unit}을 테이블당 ${per}${unit}으로 나누면 ${from}~${last}번 테이블이 필요해 볼링장 테이블 수(${max}개)를 넘습니다. 테이블당 ${minPer}${unit} 이상으로 하거나 시작 테이블을 앞당기세요.`, true); return false;
-    }
-    return true;
+  /** 자동 배정에 쓸 테이블 범위. 테이블당 인원(per)대로 나눠 볼링장 테이블 수를 넘으면, 쓸 수 있는 테이블 전부에 균등하게(일부 테이블은 per+1) 나눈다.
+   *  반환 { tables, cap, note } 또는 시작 테이블부터 이미 범위 밖이면 null */
+  function planTables(from, count, per, unit) {
+    const max = maxTable(); const needed = Math.ceil(count / Math.max(1, per));
+    if (max && from > max) { toast(`시작 테이블 ${from}번이 볼링장 테이블 수(${max}개, ${num(S().lanes)}레인)를 넘습니다. 설정의 레인 수를 확인하세요.`, true); return null; }
+    const avail = max ? max - from + 1 : needed;
+    const n = Math.min(needed, avail);
+    const cap = Math.ceil(count / n);
+    const note = cap > per ? ` 테이블이 ${needed - n}개 부족해 ${from}~${from + n - 1}번 테이블에 ${count % n ? `${cap}${unit}과 ${cap - 1}${unit}으로` : `${cap}${unit}씩`} 나눴습니다.` : '';
+    return { tables: Lanes.laneRange(from, n), cap, note };
   }
   /** 테이블(lane)·테이블 내 순번(pos) → 실제 레인과 레인 내 순번. 테이블 인원의 앞 절반(올림)은 왼쪽 레인(2t-1), 나머지는 오른쪽 레인(2t).
    *  예: 1번 테이블 5명 → 1-1, 1-2, 1-3, 2-1, 2-2 */
@@ -954,11 +954,11 @@
         const gid = el.dataset.group; const from = num($('#lane-from').value, 1), per = num($('#per-lane').value, 4);
         const list = d.players.filter(p => p.group === gid);
         if (!list.length) return toast('이 조에 선수가 없습니다.', true);
-        if (!checkTableRange(from, Lanes.lanesNeeded(list.length, per), list.length, per, '명')) return;
-        const tables = Lanes.laneRange(from, Lanes.lanesNeeded(list.length, per));
-        const a2 = Lanes.assignLanes(list, tables, per);
+        const plan = planTables(from, list.length, per, '명'); if (!plan) return;
+        const tables = plan.tables;
+        const a2 = Lanes.assignLanes(list, tables, plan.cap);
         const upd = list.map(p => ({ ...p, lane: a2[p.id].lane, pos: a2[p.id].pos }));
-        await run(async () => { d.players = await Store.savePlayers(upd); await Store.saveSettings({ tableFrom: from, perTable: per }); d.settings.tableFrom = from; d.settings.perTable = per; }, `${tables[0]}~${tables[tables.length - 1]}번 테이블(${tableLanes(tables[0]).split('·')[0]}~${2 * tables[tables.length - 1]}레인)에 배정했습니다.`); return render();
+        await run(async () => { d.players = await Store.savePlayers(upd); await Store.saveSettings({ tableFrom: from, perTable: per }); d.settings.tableFrom = from; d.settings.perTable = per; }, `${tables[0]}~${tables[tables.length - 1]}번 테이블(${tableLanes(tables[0]).split('·')[0]}~${2 * tables[tables.length - 1]}레인)에 배정했습니다.${plan.note}`); return render();
       }
       case 'fin-sub': state.finSub = el.dataset.sub; return render();
       case 'fin-action': { const r = await Finance.onAction(el, state, { run, toast, confirm: m => confirm(m), save: f => Store.saveFinance(f) }); if (r !== false) render(); return; }
@@ -983,10 +983,9 @@
       case 'auto-team-lanes': {
         const ev = el.dataset.event; const from = num($('#team-lane-from').value, 1), per = num($('#team-per-lane').value, 1);
         const ts = d.teams.filter(t => t.event === ev); if (!ts.length) return toast('팀이 없습니다.', true);
-        if (!checkTableRange(from, Math.ceil(ts.length / per), ts.length, per, '팀')) return;
-        const lanes = Lanes.laneRange(from, Math.ceil(ts.length / per));
-        const a2 = Lanes.assignTeamLanes(ts, lanes, per);
-        await run(async () => { d.teams = await Store.saveTeams(ts.map(t => ({ ...t, lane: a2[t.id], pos: a2[t.id + ':pos'] || '' }))); }, '테이블을 배정했습니다.'); return render();
+        const plan = planTables(from, ts.length, per, '팀'); if (!plan) return;
+        const a2 = Lanes.assignTeamLanes(ts, plan.tables, plan.cap);
+        await run(async () => { d.teams = await Store.saveTeams(ts.map(t => ({ ...t, lane: a2[t.id], pos: a2[t.id + ':pos'] || '' }))); }, `${plan.tables[0]}~${plan.tables[plan.tables.length - 1]}번 테이블에 배정했습니다.${plan.note}`); return render();
       }
       case 'set-status': await run(async () => { d.settings = { ...d.settings, ...(await Store.saveSettings({ status: el.dataset.status })) }; applyRole(); }, '상태가 변경되었습니다.'); return render();
       case 'finalize': {
