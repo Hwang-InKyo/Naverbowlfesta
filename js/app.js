@@ -644,15 +644,23 @@
       const reg = state.teamRegion || (d.regions[0] && d.regions[0].id) || '';
       const inTeam = new Set(d.teams.filter(t => t.event === event).flatMap(t => t.members));
       const cands = d.players.filter(p => p.regionId === reg && !inTeam.has(p.id) && (event === 'team5' || !p.events || p.events[event])).sort((a, b) => a.gender.localeCompare(b.gender) || a.name.localeCompare(b.name, 'ko'));
-      const hint = event === 'scotch' ? '남 1명 + 여 1명' : event === 'team5' ? '최대 5명 · 지역별 1팀 (점수 집계 없음, 배정만)' : '3명';
-      html += `<div class="card"><h2>${ev.name} 팀 만들기</h2><p class="muted small mb">팀 구성: ${hint}${event === 'team5' ? '' : ' · 해당 종목에 출전 신청한 선수만 표시됩니다.'}</p>${event === 'team5' ? `<div class="row mb"><button class="btn btn-small btn-secondary" data-action="team5-auto">지역별 5인조 팀 자동 생성 (${d.regions.filter(r => !d.teams.some(t => t.event === 'team5' && t.regionId === r.id)).length}개 지역)</button><span class="small muted">지역마다 팀 하나를 만듭니다. 팀원은 아래에서 골라 넣거나 비워 둬도 됩니다.</span></div>` : ''}
+      const hint = event === 'scotch' ? '남 1명 + 여 1명' : '3명';
+      if (event === 'team5') {
+        // 5인조: 선수 선택 없이 지역별 팀 하나 + 테이블 배정만
+        const missing = d.regions.filter(r => !d.teams.some(t => t.event === 'team5' && t.regionId === r.id));
+        html += `<div class="card"><h2>5인조 배정</h2><p class="muted small mb">점수 집계는 하지 않고 테이블 배정만 합니다. 지역마다 한 팀(팀 이름 = 지역명)이며 팀원은 적지 않습니다.</p>
+          <div class="row"><button class="btn btn-small btn-secondary" data-action="team5-auto" ${missing.length ? '' : 'disabled'}>지역별 팀 만들기${missing.length ? ` (${missing.length}개 지역)` : ' (모두 있음)'}</button>
+          <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="team5">테이블 자동 배정</button>
+          <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="2" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
+      } else
+      html += `<div class="card"><h2>${ev.name} 팀 만들기</h2><p class="muted small mb">팀 구성: ${hint} · 해당 종목에 출전 신청한 선수만 표시됩니다.</p>
         <div class="form-row"><div class="form-group"><label>지역</label><select data-change="team-region">${regionOptions(reg)}</select></div><div class="form-group"><label>팀명 (비우면 지역명+번호, 예: 서울1)</label><input type="text" id="team-name" placeholder="예: 서울1"></div><div class="form-group"><label>팀 핸디 (게임당)</label><input type="number" id="team-handicap" value="0"></div><div class="form-group"><label>총점 가감</label><input type="number" id="team-adjust" value="0"></div></div>
         <p class="muted small mb">규정 예: 베이커 여자 1명 +3, 2명 이상 +5 · 장애인 +3 · 프로 -3 (게임당, 핸디에 합산해 입력)</p>
         <div class="checkbox-grid">${cands.map(p => `<label class="checkbox-item"><input type="checkbox" class="team-cb" value="${esc(p.id)}" data-gender="${p.gender}"> ${esc(p.name)} <small>${p.gender === 'F' ? '여' : '남'}${p.handicap ? ' · 핸디 ' + p.handicap : ''}</small></label>`).join('') || '<span class="muted small">선택 가능한 선수가 없습니다.</span>'}</div>
         <div class="row mt"><button class="btn btn-small btn-primary" data-action="add-team" data-event="${event}">팀 등록</button>
         <button class="btn btn-small btn-secondary" data-action="auto-team-lanes" data-event="${event}">테이블 자동 배정</button>
         <button class="btn btn-small btn-outline" data-action="rename-teams" data-event="${event}" title="모든 팀 이름을 지역명+번호(청주1, 청주2…)로 다시 붙입니다">팀명 재생성 (지역명+번호)</button>
-        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' || event === 'team5' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
+        <input type="number" id="team-lane-from" value="${s.tableFrom || 1}" style="width:70px" title="시작 테이블"> <input type="number" id="team-per-lane" value="${event === 'scotch' ? 2 : 1}" style="width:60px" title="테이블당 팀 수"> <span class="small muted">시작 테이블 · 테이블당 팀 수 (볼링장 테이블 ${maxTable()}개)</span></div></div>`;
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${ev.name} 팀 (${rows.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-assign-table" data-name="${ev.name}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
