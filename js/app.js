@@ -627,7 +627,9 @@
       const byLane = new Map(all.map(l => [l, sec.rows.filter(r => r.lane === l).sort((a, b) => a.pos - b.pos)]));
       const maxPos = Math.max(1, ...sec.rows.map(r => r.pos || 0));
       // 한 장에 8레인씩 (글씨 크기 확보). 레인 범위를 8개 단위로 나눠 장을 만든다
-      const PER_PAGE = 8; const pages = []; for (let i = 0; i < all.length; i += PER_PAGE) pages.push(all.slice(i, i + PER_PAGE));
+      // 한 줄 최대 8레인. 넘으면 줄 수를 정한 뒤 레인을 줄마다 같은 수(차이 최대 1)로 나눈다: 11레인 → 6+5, 20레인 → 7+7+6
+      const PER_PAGE = 8; const nBlocks = Math.ceil(all.length / PER_PAGE); const base = Math.floor(all.length / nBlocks), extra = all.length % nBlocks;
+      const pages = []; for (let i = 0, at = 0; i < nBlocks; i++) { const size = base + (i < extra ? 1 : 0); pages.push(all.slice(at, at + size)); at += size; }
       // 8레인 블록을 같은 장에 위아래로 쌓는다 (16레인 = 두 줄). 블록 수에 맞춰 행 높이를 줄인다
       // 쓸 수 있는 높이 ≈ 190mm(A4 가로, 여백 10mm) − 제목 12mm − 블록당 머리글·간격 14mm
       // 칸 높이는 내용에 맞게 낮게(최대 15mm). 줄·순번이 많으면 한 장에 맞도록 9mm 까지 줄인다
