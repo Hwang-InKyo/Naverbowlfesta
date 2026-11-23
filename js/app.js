@@ -163,7 +163,14 @@
     document.addEventListener('change', onChange);
     document.addEventListener('input', onInput);
     document.addEventListener('compositionstart', () => { state.composing = true; });
-    document.addEventListener('compositionend', e => { state.composing = false; const attr = e.target && e.target.dataset && e.target.dataset.input; if (attr) { onInput({ target: e.target }); } else if (state.pendingRender) { const a = state.pendingRender; state.pendingRender = null; renderKeepingInput(a); } });
+    document.addEventListener('compositionend', e => {
+      state.composing = false;
+      const attr = e.target && e.target.dataset && e.target.dataset.input;
+      if (attr) { state.pendingRender = null; onInput({ target: e.target }); return; }
+      // 검색창이 아닌 입력칸(예: 배정 저장 이름)에서 한글 조합이 끝났을 때는 화면을 다시 그리지 않는다.
+      // (예전에는 검색창에서 남은 pendingRender 때문에 탭 전체가 다시 그려져 입력 중인 글자가 사라졌다)
+      state.pendingRender = null;
+    });
   }
 
   // ===== 렌더 =====
@@ -204,6 +211,8 @@
    */
   function renderKeepingInput(attr) {
     const sec = $('#tab-' + state.tab); if (!sec) return;
+    const ae = document.activeElement;
+    if (ae && sec.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.dataset.input !== attr) return;   // 다른 칸을 입력 중이면 그리지 않음
     const live = sec.querySelector(`[data-input="${attr}"]`);
     const tmp = document.createElement('div'); tmp.innerHTML = tabHtml(state.tab);
     const fresh = tmp.querySelector(`[data-input="${attr}"]`);
