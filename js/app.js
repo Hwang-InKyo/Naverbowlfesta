@@ -627,10 +627,11 @@
       const byLane = new Map(all.map(l => [l, sec.rows.filter(r => r.lane === l).sort((a, b) => a.pos - b.pos)]));
       const maxPos = Math.max(1, ...sec.rows.map(r => r.pos || 0));
       let t = `<table class="lanes"><thead><tr>${all.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
-      for (let p = 1; p <= maxPos; p++) t += `<tr>${all.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b> ${esc2(r.label)}<small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
+      for (let p = 1; p <= maxPos; p++) t += `<tr>${all.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b><span class="nm">${esc2(r.label)}</span><small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
       t += '</tbody></table>';
       return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)} <span class="sub">${esc2(sec.sub)} · ${sec.count}${sec.unit} · ${minL}~${maxL}레인${sec.missing ? ` · 미배정 ${sec.missing}${sec.unit}` : ''}</span></h1>${t}</section>`;
     };
+    const maxRows = Math.max(1, ...sections.map(sec => Math.max(0, ...sec.rows.map(r => r.pos || 0))));
     const cols = Math.max(2, ...sections.map(sec => { const ls = sec.rows.map(r => r.lane).filter(Boolean); return ls.length ? Math.max(...ls) - Math.min(...ls) + 1 : 0; }));
     const fs = cols > 16 ? 9 : cols > 12 ? 10 : 11;
     const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc2(s.name)} 레인 배정표</title>
@@ -640,8 +641,8 @@
       table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
       th, td { border: 1px solid #999; padding: 3px 4px; vertical-align: top; text-align: left; overflow: hidden; }
       th { background: #eee; text-align: center; font-size: ${fs}px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
-      td b { color: #c2410c; margin-right: 2px; } td small { display: block; color: #555; font-size: ${fs - 2}px; }
-      tr { height: ${fs * 3.6}px; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
+      td b { color: #c2410c; display: block; font-size: ${fs - 1}px; } td .nm { display: block; white-space: nowrap; font-weight: 700; font-size: ${fs + 1}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.25; margin-top: 1px; }
+      tbody tr { height: ${Math.min(32, Math.max(14, 165 / Math.max(1, maxRows)))}mm; } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
       <body><div class="toolbar"><button onclick="window.print()">인쇄</button> 가로(A4) 기준, 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''} 각 한 장</div>${sections.map(sectionHtml).join('')}</body></html>`;
     const w = window.open('', '_blank'); if (!w) return toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.', true);
     w.document.open(); w.document.write(html); w.document.close();
