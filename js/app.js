@@ -635,8 +635,9 @@
       // 칸 높이는 내용에 맞게 낮게(최대 15mm). 줄·순번이 많으면 한 장에 맞도록 9mm 까지 줄인다
       const rowH = Math.min(15, Math.max(9, (178 - pages.length * 14) / (pages.length * maxPos)));
       const blocks = pages.map(ls => {
-        let t = `<table class="lanes" style="--rowh:${rowH}mm"><thead><tr>${ls.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
-        for (let p = 1; p <= maxPos; p++) t += `<tr>${ls.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b><span class="nm">${esc2(r.label)}</span><small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
+        const tc = l => (l % 2 ? 'tl' : 'tr');   // 테이블 왼쪽/오른쪽 레인 → 진한 테두리
+        let t = `<table class="lanes" style="--rowh:${rowH}mm"><thead><tr>${ls.map(l => `<th class="${tc(l)}">${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
+        for (let p = 1; p <= maxPos; p++) t += `<tr class="${p === maxPos ? 'last' : ''}">${ls.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td class="${tc(l)}">${r ? `<b>${l}-${p}</b><span class="nm">${esc2(r.label)}</span><small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
         return t + '</tbody></table>';
       }).join('');
       return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)} <span class="sub">${esc2(sec.sub)} · ${sec.count}${sec.unit} · ${minL}~${maxL}레인${sec.missing ? ` · 미배정 ${sec.missing}${sec.unit}` : ''}</span></h1>${blocks}</section>`;
@@ -648,7 +649,8 @@
       section { page-break-after: always; padding: 0; } table.lanes { page-break-inside: avoid; } section:last-child { page-break-after: auto; }
       h1 { font-size: 16px; margin: 0 0 6px; } h1 .sub, p.sub { font-size: 11px; font-weight: 400; color: #555; margin-left: 8px; }
       table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
-      th, td { border: 1px solid #999; padding: 2px 4px; vertical-align: top; text-align: left; overflow: hidden; }
+      th, td { border: 1px solid #bbb; padding: 2px 4px; vertical-align: top; text-align: left; overflow: hidden; }
+      .tl { border-left: 2.5px solid #222; } .tr { border-right: 2.5px solid #222; } th { border-top: 2.5px solid #222; } tr.last td { border-bottom: 2.5px solid #222; }
       th { background: #eee; text-align: center; font-size: ${fs + 1}px; padding: 5px 4px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
       td b { color: #c2410c; font-size: ${fs - 1}px; margin-right: 4px; } td .nm { white-space: nowrap; font-weight: 700; font-size: ${fs + 2}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.2; }
       table.lanes + table.lanes { margin-top: 5mm; } tbody tr { height: var(--rowh, 20mm); } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
