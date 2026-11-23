@@ -425,7 +425,11 @@
     const pct = pr.individual.total ? Math.round(pr.individual.done / pr.individual.total * 100) : 0;
     const allDone = pr.individual.done === pr.individual.total && pr.scotch.done === pr.scotch.total && pr.baker.done === pr.baker.total;
     const demoNotice = Store.mode() === 'local' ? `<div class="card" style="border-color:var(--orange-input-line);background:var(--orange-input)"><b>데모 모드</b> <span class="muted">— 지금 입력하는 데이터는 이 브라우저에만 저장되어 다른 기기(핸드폰 등)에서는 보이지 않습니다. Netlify에 배포된 주소(naverbowlfesta.netlify.app)에서 열면 자동으로 서버 모드가 되어 모든 기기가 같은 데이터를 봅니다.</span></div>` : '';
-    return demoNotice + `<div class="stat-grid" style="margin-bottom:20px">
+    const pubUrl = 'https://naverbowlfesta.netlify.app/';
+    const qrCard = `<div class="card qr-card"><div class="row" style="gap:18px;align-items:center;flex-wrap:wrap"><img src="qr.svg" alt="회원용 페이지 QR" width="132" height="132" style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px">
+      <div style="flex:1;min-width:220px"><h2 style="margin:0 0 6px">회원용 QR 코드</h2><p class="muted small" style="margin:0 0 10px">카메라로 찍으면 회원 조회 화면(${esc(pubUrl)})이 열립니다. 단체 채팅방 공지나 볼링장 안내판에 붙이세요.</p>
+      <div class="row"><button class="btn btn-small btn-primary" data-action="print-qr">QR 안내문 인쇄 (A4)</button><a class="btn btn-small btn-outline" href="qr.png" download="naverbowlfesta-qr.png">PNG 내려받기</a><button class="btn btn-small btn-outline" data-action="copy-url">주소 복사</button></div></div></div></div>`;
+    return demoNotice + qrCard + `<div class="stat-grid" style="margin-bottom:20px">
       ${stat(`${d.players.length}<small>명</small>`, '참가 선수', `${d.regions.length}개 지역 참가`)}
       ${stat(`${Math.floor((s.lanes || 0) / 2)}<small>테이블</small>`, '등록 레인', `${s.lanes || 0}레인 · 테이블당 ${s.perTable || 4}명 · ${d.players.filter(p => p.lane).length}명 배정됨`)}
       ${stat(`${pct}<small>%</small>`, '개인전 진행률', `${pr.individual.done}/${pr.individual.total}명 입력`, true)}
@@ -991,6 +995,14 @@
       case 'csv': return tableCsv(el.dataset.sel, el.dataset.name);
       case 'print': return window.print();
       case 'print-lanes': return printLaneSheets();
+      case 'copy-url': { const u = 'https://naverbowlfesta.netlify.app/'; try { await navigator.clipboard.writeText(u); toast('주소를 복사했습니다.'); } catch (e) { prompt('주소를 복사하세요', u); } return; }
+      case 'print-qr': {
+        const u = 'https://naverbowlfesta.netlify.app/'; const w = window.open('', '_blank'); if (!w) return toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.', true);
+        const svg = await fetch('qr.svg').then(r => r.text()).catch(() => '');
+        w.document.open(); w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc(s.name)} QR</title><style>@page{size:A4 portrait;margin:15mm} body{font-family:'Noto Sans KR','Malgun Gothic',sans-serif;text-align:center;color:#1E2537;margin:0}
+          h1{font-size:30px;margin:18mm 0 4mm} .sub{font-size:16px;color:#555;margin-bottom:12mm} .qr{width:120mm;height:120mm;margin:0 auto} .qr svg{width:100%;height:100%} .url{font-size:18px;margin-top:10mm;letter-spacing:.3px} .how{font-size:14px;color:#555;margin-top:6mm;line-height:1.7}
+          .toolbar{padding:10px;background:#f3f3f3;font-size:13px;text-align:left} @media print{.toolbar{display:none}}</style></head>
+          <body><div class="toolbar"><button onclick="window.print()">인쇄</button> A4 세로 한 장</div><h1>${esc(s.name)}</h1><div class="sub">실시간 점수 · 레인 배정 · 순위 조회</div><div class="qr">${svg}</div><div class="url">${esc(u)}</div><div class="how">카메라로 QR을 찍으면 바로 열립니다. 로그인 없이 이름으로 검색하세요.</div></body></html>`); w.document.close(); return; }
       case 'signup-register': { const msg = await run(() => registerSignup(num(el.dataset.i))); if (msg) toast(msg); return render(); }
       case 'signup-register-all': {
         const missing = state.uploads.filter(u => u.parsed && !u.done && !(u.regionName || '').trim());
