@@ -60,11 +60,19 @@
     const t = num(r.lane); if (!t) return null;
     const d = state.data;
     const n = kind === 'team' ? d.teams.filter(x => x.event === r.event && num(x.lane) === t).length : d.players.filter(x => (x.group || '') === (r.group || '') && num(x.lane) === t).length;
-    const p = num(r.pos); if (!p) return { table: t, lane: '', pos: '', text: `${t}번 테이블` };
+    const p = num(r.pos); if (!p) return { table: t, lane: '', pos: '', text: `${2 * t - 1}·${2 * t}레인` };   // 순번이 없으면 테이블의 두 레인
     const half = Math.ceil(n / 2); const left = p <= half; const lane = left ? 2 * t - 1 : 2 * t; const pos = left ? p : p - half;
     return { table: t, lane, pos, text: `${lane}-${pos}` };
   }
   const tablePos = (r, kind) => { const l = laneOf(r, kind); return l ? l.text : '-'; };
+  /** 관리자 배정 화면의 테이블 상자: 왼쪽 레인·오른쪽 레인을 두 열로 나란히 */
+  function laneBox(table, list, labelFn, kind) {
+    if (table === '미배정') return `<div class="lane-box"><div class="ln">미배정</div><ul class="lane-list">${list.map(r => `<li>${labelFn(r)}</li>`).join('')}</ul></div>`;
+    const t = num(table); const cols = [[], []];
+    list.forEach(r => { const l = laneOf(r, kind); cols[l && l.lane === 2 * t ? 1 : 0].push({ r, l }); });
+    const col = (items, laneNo) => `<div class="lane-col"><div class="lane-col-h">${laneNo}레인</div><ul class="lane-list">${items.map(({ r, l }) => `<li><b>${l ? l.text : '-'}</b> ${labelFn(r)}</li>`).join('') || '<li class="muted">-</li>'}</ul></div>`;
+    return `<div class="lane-box wide"><div class="ln">${t}번 테이블</div><div class="lane-cols">${col(cols[0], 2 * t - 1)}${col(cols[1], 2 * t)}</div></div>`;
+  }
   const dirtyCount = () => state.dirtyPlayers.size + state.dirtyTeams.size;
   /** 총점에 1회 적용되는 값 표시: 조 보너스 + 개인 가감 */
   const onceText = p => { if (!p) return '-'; const b = Ranking.groupBonus(p.group, S()), a = num(p.adjust); const parts = []; if (b) parts.push('조 +' + b); if (a) parts.push((a > 0 ? '+' : '') + a); return parts.join(' ') || '-'; };
@@ -270,9 +278,9 @@
       <div class="card id-card" style="margin:0"><div class="row between"><div class="name">${esc(p.name)}</div>${p.isRep ? '<span class="badge rep-badge" style="font-size:11.5px;padding:5px 10px">지역 대표</span>' : ''}</div>
         <div class="meta"><span>${esc(regionName(p.regionId))}${(regionById(p.regionId) || {}).guest ? ' <span class="badge guest-badge">게스트 · 순위 집계 제외</span>' : ''}</span><span>·</span><span>${p.gender === 'F' ? '여자' : '남자'}</span>${p.birthYear ? `<span>·</span><span>${p.birthYear}년생</span>` : ''}</div></div>
       <div class="card stack" style="margin:0"><h2 style="margin:0">참가 종목</h2>
-        ${evRow('individual', ind, ind ? `개인전${g ? ' · ' + esc(g.name) : ''}` : '개인전', ind ? `${esc(groupDate(g)) || '조 미편성'}${row && row.lane ? ` · ${tablePos(row)} (${row.lane}번 테이블)` : ''}${g && g.bonus ? ` · 조 보너스 +${g.bonus} (총점 1회)` : ''}` : '미신청')}
-        ${evRow('scotch', !!sc, sc ? `스카치 더블 · ${esc(sc.name || partner(sc))}${sc.name ? ` (${esc(partner(sc))})` : ''}` : '스카치 더블', sc ? (sc.lane ? `${tablePos(sc, 'team')} · ${sc.lane}번 테이블` : '테이블 미배정') : '미신청')}
-        ${evRow('baker', !!bk, bk ? `베이커 · ${esc(bk.name || partner(bk))}${bk.name ? ` (${esc(partner(bk))})` : ''}` : '베이커', bk ? (bk.lane ? `${tablePos(bk, 'team')} · ${bk.lane}번 테이블` : '테이블 미배정') : '미신청')}
+        ${evRow('individual', ind, ind ? `개인전${g ? ' · ' + esc(g.name) : ''}` : '개인전', ind ? `${esc(groupDate(g)) || '조 미편성'}${row && row.lane ? ` · 레인 ${tablePos(row)}` : ''}${g && g.bonus ? ` · 조 보너스 +${g.bonus} (총점 1회)` : ''}` : '미신청')}
+        ${evRow('scotch', !!sc, sc ? `스카치 더블 · ${esc(sc.name || partner(sc))}${sc.name ? ` (${esc(partner(sc))})` : ''}` : '스카치 더블', sc ? (sc.lane ? `레인 ${tablePos(sc, 'team')}` : '레인 미배정') : '미신청')}
+        ${evRow('baker', !!bk, bk ? `베이커 · ${esc(bk.name || partner(bk))}${bk.name ? ` (${esc(partner(bk))})` : ''}` : '베이커', bk ? (bk.lane ? `레인 ${tablePos(bk, 'team')}` : '레인 미배정') : '미신청')}
       </div>
       <div class="card" style="margin:0"><h2 style="margin-bottom:10px">핸디 정보</h2><div class="tiles"><div class="tile"><div class="v hi">${num(p.handicap)}</div><div class="l">핸디 (게임당)</div></div><div class="tile"><div class="v">${g && g.bonus ? '+' + g.bonus : '0'}</div><div class="l">조 보너스 (총점 1회)</div></div><div class="tile"><div class="v">${num(p.adjust) || 0}</div><div class="l">총점 가감</div></div></div>
         <div class="muted" style="font-size:11px;margin-top:9px;color:var(--text-3)">게임당 핸디(여성·시니어·프로 등)는 매 게임 적용되고, 조 보너스와 가감은 총점에 한 번만 더해집니다.</div></div>`;
@@ -301,9 +309,9 @@
       const rows = Ranking.teamRows(d.teams, sub, pr, d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.regionName.localeCompare(b.regionName, 'ko'));
       const mine = hit ? rows.find(r => r.memberIds.includes(hit.id)) : null;
       if (hit && !mine) html += `<div class="card" style="margin:0"><p class="empty">${esc(hit.name)} 선수는 ${EV[sub].name}에 등록되어 있지 않습니다.</p></div>`;
-      if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${tablePos(mine, 'team')}</span><span class="u">${mine.pos ? '레인-순번' : ''}</span>` : '<span class="u">테이블 미배정</span>'}</div><div class="facts">${mine.lane ? `<div><div class="k">테이블</div><div class="v">${mine.lane}번 (${tableLanes(mine.lane)})</div></div>` : ''}<div><div class="k">팀</div><div class="v">${esc(mine.name)}</div></div><div><div class="k">지역</div><div class="v">${esc(mine.regionName)}</div></div><div><div class="k">팀 핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
+      if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${tablePos(mine, 'team')}</span><span class="u">${mine.pos ? '레인-순번' : '레인'}</span>` : '<span class="u">레인 미배정</span>'}</div><div class="facts"><div><div class="k">팀</div><div class="v">${esc(mine.name)}</div></div><div><div class="k">지역</div><div class="v">${esc(mine.regionName)}</div></div><div><div class="k">팀 핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
       html += `<div class="card grid-tbl" style="margin:0"><div class="row between" style="margin-bottom:10px"><b style="font-size:13.5px">${EV[sub].name} 팀 명단</b><span class="muted" style="color:var(--text-3)">${rows.length}팀</span></div>
-        <div class="gh" style="grid-template-columns:44px 1fr 44px"><span>테이블</span><span>팀 · 지역</span><span class="r">핸디</span></div>
+        <div class="gh" style="grid-template-columns:44px 1fr 44px"><span>레인</span><span>팀 · 지역</span><span class="r">핸디</span></div>
         ${rows.map(r => `<div class="gr ${mine && r.teamId === mine.teamId ? 'hit' : ''}" style="grid-template-columns:44px 1fr 44px"><span class="b">${tablePos(r, 'team')}</span><span>${esc(r.name)}<div class="dim" style="font-size:11px">${esc(r.regionName)} · ${r.memberNames.map(esc).join(', ')}</div></span><span class="r">${r.handicap}</span></div>`).join('') || '<p class="empty">등록된 팀이 없습니다.</p>'}</div>`;
       return html + '</div>';
     }
@@ -311,10 +319,10 @@
     const rows = Ranking.playerRows(d.players.filter(p => p.group === sub), d.regions, s).sort((a, b) => num(a.lane, 999) - num(b.lane, 999) || num(a.pos, 99) - num(b.pos, 99) || a.name.localeCompare(b.name, 'ko'));
     const mine = hit ? rows.find(r => r.playerId === hit.id) : null;
     if (hit && !mine) html += `<div class="card" style="margin:0"><p class="empty">${esc(hit.name)} 선수는 ${esc(g.name)}에 편성되어 있지 않습니다${hit.group ? ` (${esc(groupName(hit.group))})` : ' (조 미편성)'}.</p></div>`;
-    if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${tablePos(mine)}</span><span class="u">${mine.pos ? '레인-순번' : ''}</span>` : '<span class="u">테이블 미배정</span>'}</div><div class="facts">${mine.lane ? `<div><div class="k">테이블</div><div class="v">${mine.lane}번 (${tableLanes(mine.lane)})</div></div>` : ''}<div><div class="k">조</div><div class="v">${esc(g.name)}</div></div><div><div class="k">시작 시간</div><div class="v">${esc(groupDate(g) || '-')}</div></div><div><div class="k">핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
+    if (mine) html += `<div class="result-card"><div class="cap">검색 결과 · ${esc(hit.name)}</div><div class="big">${mine.lane ? `<span class="n">${tablePos(mine)}</span><span class="u">${mine.pos ? '레인-순번' : '레인'}</span>` : '<span class="u">레인 미배정</span>'}</div><div class="facts"><div><div class="k">조</div><div class="v">${esc(g.name)}</div></div><div><div class="k">시작 시간</div><div class="v">${esc(groupDate(g) || '-')}</div></div><div><div class="k">핸디</div><div class="v">${mine.handicap}</div></div></div></div>`;
     html += `<div class="card grid-tbl" style="margin:0"><div class="row between" style="margin-bottom:10px"><b style="font-size:13.5px">${esc(g.name)} 전체 명단</b><span class="muted" style="color:var(--text-3)">${esc(groupTime(g))}${groupTime(g) ? ' · ' : ''}${rows.length}명</span></div>
-      <div class="gh" style="grid-template-columns:48px 40px 1fr 44px"><span>테이블</span><span>순번</span><span>이름 · 지역</span><span class="r">핸디</span></div>
-      ${rows.map(r => `<div class="gr ${mine && r.playerId === mine.playerId ? 'hit' : ''}" style="grid-template-columns:48px 40px 1fr 44px"><span class="b">${r.lane || '-'}</span><span>${r.pos || '-'}</span><span>${esc(r.name)} <span class="dim">· ${esc(r.regionName)}</span></span><span class="r">${r.handicap}</span></div>`).join('') || '<p class="empty">이 조에 편성된 선수가 없습니다.</p>'}</div>`;
+      <div class="gh" style="grid-template-columns:52px 1fr 44px"><span>레인</span><span>이름 · 지역</span><span class="r">핸디</span></div>
+      ${rows.map(r => `<div class="gr ${mine && r.playerId === mine.playerId ? 'hit' : ''}" style="grid-template-columns:52px 1fr 44px"><span class="b">${tablePos(r)}</span><span>${esc(r.name)} <span class="dim">· ${esc(r.regionName)}</span></span><span class="r">${r.handicap}</span></div>`).join('') || '<p class="empty">이 조에 편성된 선수가 없습니다.</p>'}</div>`;
     return html + '</div>';
   }
 
@@ -386,14 +394,14 @@
       ${searchBox('rec-q', state.recQ, '이름 검색', true)}
       <div class="card" style="margin:0"><h2>개인전 전체 기록 <span class="muted" style="font-weight:500;color:var(--text-3)">${played.length}명 입력${pending ? ` · ${pending}명 대기` : ''}</span><span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#rec-table" data-name="개인전전체기록">CSV</button></span></h2>
         <p class="muted small mb">${inc ? '게임 점수는 볼링장 출력값(핸디 포함), 총핀은 핸디를 뺀 값' : '게임 점수와 총핀은 핸디 제외 값'} · 총점 = 총핀 + 핸디×게임수 + 보너스·가감 · 순위 기준 ${s.basis === 'scratch' ? '총핀' : '총점'}</p>
-        <div class="table-scroll"><table class="tbl" id="rec-table"><thead><tr><th>순위</th><th class="left">이름</th><th class="left">지역</th><th>조</th><th>테이블</th><th>핸디/G</th>${gameHeads(n)}<th>총핀</th><th>보너스·가감</th><th>총점</th></tr></thead><tbody>
+        <div class="table-scroll"><table class="tbl" id="rec-table"><thead><tr><th>순위</th><th class="left">이름</th><th class="left">지역</th><th>조</th><th>레인</th><th>핸디/G</th>${gameHeads(n)}<th>총핀</th><th>보너스·가감</th><th>총점</th></tr></thead><tbody>
         ${played.map(r => `<tr class="${hitIds.has(r.playerId) ? 'me' : ''}"><td>${r.isGuest ? '<span class="badge guest-badge">게스트</span>' : r.rank <= 3 ? medal(r.rank) : r.rank}</td><td class="left"><b>${esc(r.name)}</b>${r.gender === 'F' ? ' <span class="badge gender-F">여</span>' : ''}${r.isRep ? ' <span class="badge rep-badge">대표</span>' : ''}</td><td class="left">${esc(r.regionName)}</td><td>${esc(groupName(r.group))}</td><td>${tablePos(r)}</td><td>${r.handicap}</td>${gamesOf(r, n)}<td>${r.scratch}</td><td>${r.onceTotal ? (r.onceTotal > 0 ? '+' : '') + r.onceTotal : '-'}</td><td class="strong">${r.total}</td></tr>`).join('') || `<tr><td colspan="${n + 10}" class="empty">아직 입력된 점수가 없습니다.</td></tr>`}
         </tbody></table></div></div>`;
     ['scotch', 'baker'].forEach(ev => {
       const tn = s.games[ev]; const trs = res[ev].filter(r => (!state.recRegion || r.regionId === state.recRegion) && (!q || r.memberIds.some(id => hitIds.has(id))));
       html += `<div class="card" style="margin:0"><h2>${EV[ev].name} 기록 <span class="muted" style="font-weight:500;color:var(--text-3)">${trs.filter(r => r.gamesPlayed > 0).length}/${trs.length}팀 입력</span></h2>
-        <div class="table-scroll"><table class="tbl"><thead><tr><th>순위</th><th class="left">팀</th><th class="left">선수</th><th>테이블</th><th>핸디/G</th>${gameHeads(tn)}<th>총핀</th><th>총점</th></tr></thead><tbody>
-        ${trs.map(r => `<tr class="${r.memberIds.some(id => hitIds.has(id)) ? 'me' : ''}"><td>${r.gamesPlayed ? (r.rank <= 3 ? medal(r.rank) : r.rank) : '-'}</td><td class="left"><b>${esc(r.name)}</b></td><td class="left small">${r.memberNames.map(esc).join(', ')}</td><td>${r.lane || '-'}</td><td>${r.handicap}</td>${gamesOf(r, tn)}<td>${r.scratch}</td><td class="strong">${r.gamesPlayed ? r.total : '-'}</td></tr>`).join('') || `<tr><td colspan="${tn + 7}" class="empty">등록된 팀이 없습니다.</td></tr>`}
+        <div class="table-scroll"><table class="tbl"><thead><tr><th>순위</th><th class="left">팀</th><th class="left">선수</th><th>레인</th><th>핸디/G</th>${gameHeads(tn)}<th>총핀</th><th>총점</th></tr></thead><tbody>
+        ${trs.map(r => `<tr class="${r.memberIds.some(id => hitIds.has(id)) ? 'me' : ''}"><td>${r.gamesPlayed ? (r.rank <= 3 ? medal(r.rank) : r.rank) : '-'}</td><td class="left"><b>${esc(r.name)}</b></td><td class="left small">${r.memberNames.map(esc).join(', ')}</td><td>${tablePos(r, 'team')}</td><td>${r.handicap}</td>${gamesOf(r, tn)}<td>${r.scratch}</td><td class="strong">${r.gamesPlayed ? r.total : '-'}</td></tr>`).join('') || `<tr><td colspan="${tn + 7}" class="empty">등록된 팀이 없습니다.</td></tr>`}
         </tbody></table></div></div>`;
     });
     return html;
@@ -613,7 +621,7 @@
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${esc(g.name)} <span class="muted small">${g.day ? g.day + '일차' : ''} ${esc(g.time || '')} · ${rows.length}명</span> <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#assign-table" data-name="${esc(g.name)}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
-      <div class="lane-grid mb">${[...byLane.entries()].map(([lane, list]) => `<div class="lane-box"><div class="ln">${lane === '미배정' ? '미배정' : lane + '번 테이블 <small>' + tableLanes(lane) + '</small>'}</div><ul class="lane-list">${list.map(r => `<li><b>${tablePos(r)}</b> ${esc(r.name)}${r.isRep ? '<span class="badge rep-badge">대표</span>': ''} <small>${esc(r.regionName)} ${r.gender === 'F' ? '여' : ''} 핸디 ${r.handicap}</small></li>`).join('')}</ul></div>`).join('') || '<p class="empty">이 조에 편성된 선수가 없습니다.</p>'}</div>
+      <div class="lane-grid mb">${[...byLane.entries()].map(([lane, list]) => laneBox(lane, list, r => `${esc(r.name)}${r.isRep ? '<span class="badge rep-badge">대표</span>': ''} <small>${esc(r.regionName)} ${r.gender === 'F' ? '여' : ''} 핸디 ${r.handicap}</small>`, 'player')).join('') || '<p class="empty">이 조에 편성된 선수가 없습니다.</p>'}</div>
       <div class="table-scroll"><table class="tbl" id="assign-table"><thead><tr><th>테이블</th><th>순번</th><th class="left">이름</th><th class="left">지역</th><th>성별</th><th>핸디</th>${isAdmin() ? '<th>조</th>': ''}</tr></thead><tbody>
       ${rows.map(r => `<tr>${isAdmin() ? `<td><input type="number" class="sm" data-pfield="lane" data-id="${esc(r.playerId)}" value="${esc(r.lane)}"></td><td><input type="number" class="sm" data-pfield="pos" data-id="${esc(r.playerId)}" value="${esc(r.pos)}"></td>` : `<td>${r.lane || '-'}</td><td>${r.pos || '-'}</td>`}<td class="left"><b>${esc(r.name)}</b>${r.isRep ? ' <span class="badge rep-badge">대표</span>': ''}</td><td class="left">${esc(r.regionName)}</td><td>${genderBadge(r.gender)}</td><td>${r.handicap}</td>${isAdmin() ? `<td><select class="sm" data-pfield="group" data-id="${esc(r.playerId)}">${groupOptions(r.group, '미편성')}</select></td>` : ''}</tr>`).join('') || '<tr><td colspan="8" class="empty">선수가 없습니다.</td></tr>'}
       </tbody></table></div>${isAdmin() ? `<div class="mt">${saveBar()}</div>` : ''}</div>`;
@@ -645,7 +653,7 @@
     }
     const byLane = new Map(); rows.forEach(r => { const k = r.lane || '미배정'; if (!byLane.has(k)) byLane.set(k, []); byLane.get(k).push(r); });
     html += `<div class="card"><h2>${ev.name} 팀 (${rows.length}) <span class="h-actions no-print"><button class="btn btn-xs btn-outline" data-action="csv" data-sel="#team-assign-table" data-name="${ev.name}배정">CSV</button><button class="btn btn-xs btn-outline" data-action="print">인쇄</button></span></h2>
-      <div class="lane-grid mb">${[...byLane.entries()].map(([lane, list]) => `<div class="lane-box"><div class="ln">${lane === '미배정' ? '미배정' : lane + '번 테이블 <small>' + tableLanes(lane) + '</small>'}</div><ul class="lane-list">${list.map(r => `<li><b>${tablePos(r, 'team')}</b> ${esc(r.name)} <small class="muted">${r.memberNames.map(esc).join('·')}</small></li>`).join('')}</ul></div>`).join('')}</div>
+      <div class="lane-grid mb">${[...byLane.entries()].map(([lane, list]) => laneBox(lane, list, r => `${esc(r.name)} <small class="muted">${r.memberNames.map(esc).join('·')}</small>`, 'team')).join('')}</div>
       <p class="muted small mb">테이블-순번(예: 1-1, 1-2)으로 표시됩니다. 아래 표에서 테이블·순번을 직접 고친 뒤 <b>저장</b>을 누르세요.</p>
       <div class="table-scroll"><table class="tbl" id="team-assign-table"><thead><tr><th>테이블</th><th>순번</th><th class="left">지역</th><th class="left">팀 / 선수</th><th>핸디/게임</th><th>가감</th>${isAdmin() ? '<th></th>': ''}</tr></thead><tbody>
       ${rows.map(r => `<tr>${isAdmin() ? `<td><input type="number" class="sm" data-tfield="lane" data-id="${esc(r.teamId)}" value="${esc(r.lane)}"></td><td><input type="number" class="sm" data-tfield="pos" data-id="${esc(r.teamId)}" value="${esc(r.pos)}"></td>` : `<td>${r.lane || '-'}</td><td>${r.pos || '-'}</td>`}<td class="left">${esc(r.regionName)}</td><td class="left"><b>${esc(r.name)}</b>${!r.valid ? ' <span class="badge live">인원 확인</span>': ''}<br><small class="muted">${r.members.map(m => esc(m.name) + '(' + (m.gender === 'F' ? '여' : '남') + ')').join(', ')}</small></td>${isAdmin() ? `<td><input type="number" class="sm" data-tfield="handicap" data-id="${esc(r.teamId)}" value="${esc(r.handicap)}"></td><td><input type="number" class="sm" data-tfield="adjust" data-id="${esc(r.teamId)}" value="${esc(r.adjust || 0)}"></td>` : `<td>${r.handicap}</td><td>${r.adjust || '-'}</td>`}${isAdmin() ? `<td><button class="btn btn-xs btn-danger" data-action="del-team" data-id="${esc(r.teamId)}">삭제</button></td>` : ''}</tr>`).join('') || '<tr><td colspan="6" class="empty">등록된 팀이 없습니다.</td></tr>'}

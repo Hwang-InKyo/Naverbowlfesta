@@ -392,3 +392,7 @@ body.is-public .tbl th, body.is-public .tbl td { padding: 8px 5px; }
 .badge.guest-badge { background: #EEE8D8; color: #6B5E3C; }
 .lane-list { list-style: none; padding: 0; margin: 0; font-size: 12.5px; }
 .lane-list li { padding: 2px 0; } .lane-list li b { display: inline-block; min-width: 34px; color: var(--orange-text); }
+.lane-box.wide { grid-column: span 2; }
+.lane-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lane-col-h { font-size: 11px; color: var(--text-3); font-weight: 700; margin-bottom: 2px; }
+.lane-col + .lane-col { border-left: 1px solid var(--line-soft); padding-left: 10px; }
