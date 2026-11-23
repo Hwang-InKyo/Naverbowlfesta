@@ -628,25 +628,28 @@
       const maxPos = Math.max(1, ...sec.rows.map(r => r.pos || 0));
       // 한 장에 8레인씩 (글씨 크기 확보). 레인 범위를 8개 단위로 나눠 장을 만든다
       const PER_PAGE = 8; const pages = []; for (let i = 0; i < all.length; i += PER_PAGE) pages.push(all.slice(i, i + PER_PAGE));
-      return pages.map((ls, pi) => {
-        let t = `<table class="lanes"><thead><tr>${ls.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
+      // 8레인 블록을 같은 장에 위아래로 쌓는다 (16레인 = 두 줄). 블록 수에 맞춰 행 높이를 줄인다
+      // 쓸 수 있는 높이 ≈ 190mm(A4 가로, 여백 10mm) − 제목 12mm − 블록당 머리글·간격 14mm
+      const rowH = Math.min(30, Math.max(11, (178 - pages.length * 14) / (pages.length * maxPos)));
+      const blocks = pages.map(ls => {
+        let t = `<table class="lanes" style="--rowh:${rowH}mm"><thead><tr>${ls.map(l => `<th>${l}레인<small>${Math.ceil(l / 2)}번 테이블</small></th>`).join('')}</tr></thead><tbody>`;
         for (let p = 1; p <= maxPos; p++) t += `<tr>${ls.map(l => { const r = (byLane.get(l) || []).find(x => x.pos === p); return `<td>${r ? `<b>${l}-${p}</b><span class="nm">${esc2(r.label)}</span><small>${esc2(r.note)}</small>` : ''}</td>`; }).join('')}</tr>`;
-        t += '</tbody></table>';
-        return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)} <span class="sub">${esc2(sec.sub)} · ${sec.count}${sec.unit} · ${ls[0]}~${ls[ls.length - 1]}레인${pages.length > 1 ? ` (${pi + 1}/${pages.length})` : ''}${sec.missing ? ` · 미배정 ${sec.missing}${sec.unit}` : ''}</span></h1>${t}</section>`;
+        return t + '</tbody></table>';
       }).join('');
+      return `<section><h1>${esc2(s.name)} · ${esc2(sec.title)} <span class="sub">${esc2(sec.sub)} · ${sec.count}${sec.unit} · ${minL}~${maxL}레인${sec.missing ? ` · 미배정 ${sec.missing}${sec.unit}` : ''}</span></h1>${blocks}</section>`;
     };
     const maxRows = Math.max(1, ...sections.map(sec => Math.max(0, ...sec.rows.map(r => r.pos || 0))));
     const fs = 13;   // 한 장 8레인 기준 글씨 크기
     const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc2(s.name)} 레인 배정표</title>
       <style>@page { size: A4 landscape; margin: 10mm; } body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; color: #111; margin: 0; }
-      section { page-break-after: always; padding: 4mm 0; } section:last-child { page-break-after: auto; }
+      section { page-break-after: always; padding: 0; } table.lanes { page-break-inside: avoid; } section:last-child { page-break-after: auto; }
       h1 { font-size: 16px; margin: 0 0 6px; } h1 .sub, p.sub { font-size: 11px; font-weight: 400; color: #555; margin-left: 8px; }
       table.lanes { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${fs}px; }
       th, td { border: 1px solid #999; padding: 3px 4px; vertical-align: top; text-align: left; overflow: hidden; }
       th { background: #eee; text-align: center; font-size: ${fs + 1}px; padding: 5px 4px; } th small { display: block; font-weight: 400; color: #666; font-size: ${fs - 2}px; }
       td b { color: #c2410c; display: block; font-size: ${fs - 1}px; } td .nm { display: block; white-space: nowrap; font-weight: 700; font-size: ${fs + 3}px; } td small { display: block; color: #555; font-size: ${fs - 2}px; line-height: 1.25; margin-top: 1px; }
-      tbody tr { height: ${Math.min(32, Math.max(14, 165 / Math.max(1, maxRows)))}mm; } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
-      <body><div class="toolbar"><button onclick="window.print()">인쇄</button> A4 가로 · 한 장에 8레인씩 · 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''}</div>${sections.map(sectionHtml).join('')}</body></html>`;
+      table.lanes + table.lanes { margin-top: 5mm; } tbody tr { height: var(--rowh, 20mm); } thead tr { height: auto; } .toolbar { padding: 10px; background: #f3f3f3; font-size: 13px; } @media print { .toolbar { display: none; } }</style></head>
+      <body><div class="toolbar"><button onclick="window.print()">인쇄</button> A4 가로 · 한 줄에 8레인, 8레인이 넘으면 두 줄 · 개인전 조별·스카치·베이커${sections.some(x => x.title === '5인조') ? '·5인조' : ''}</div>${sections.map(sectionHtml).join('')}</body></html>`;
     const w = window.open('', '_blank'); if (!w) return toast('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.', true);
     w.document.open(); w.document.write(html); w.document.close();
   }
