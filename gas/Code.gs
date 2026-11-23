@@ -23,7 +23,7 @@ const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
 const SH = { settings: '설정', regions: '지역', players: '선수', teams: '팀', results: '결과' };
 const H = {
   settings: ['키', '값'],
-  regions: ['ID', '이름', '대표', '비고'],
+  regions: ['ID', '이름', '대표', '비고', '게스트'],
   players: ['ID', '이름', '지역ID', '성별', '생년', '핸디', '가감', '대표', '조', '레인', '순번', '게임', '종목', '비고'],
   teams: ['ID', '종목', '지역ID', '팀명', '선수', '레인', '핸디', '가감', '게임'],
   results: ['키', '데이터']
@@ -136,9 +136,9 @@ function saveSettings(ss, patch) {
 
 // ===== 지역 =====
 function getRegions(ss) {
-  return rows(ss, 'regions').map(r => ({ id: str(r[0]), name: str(r[1]), leader: str(r[2]), note: str(r[3]) }));
+  return rows(ss, 'regions').map(r => ({ id: str(r[0]), name: str(r[1]), leader: str(r[2]), note: str(r[3]), guest: r[4] === true || r[4] === 1 || str(r[4]) === '1' || str(r[4]) === 'TRUE' }));
 }
-function regionRow(r) { return [r.id, r.name || '', r.leader || '', r.note || '']; }
+function regionRow(r) { return [r.id, r.name || '', r.leader || '', r.note || '', r.guest ? 1 : 0]; }
 function saveRegion(ss, r) {
   r.id = r.id || newId('r');
   upsertRow(sheetOf(ss, 'regions'), r.id, regionRow(r));

@@ -152,3 +152,24 @@ test('progress counts completed inputs', () => {
   assert.deepEqual(p.scotch, { total: 2, done: 2 });
   assert.equal(p.team5, undefined);
 });
+
+test('guest regions are excluded from individual, team, rep and region standings', () => {
+  const data = {
+    settings: { ...R.DEFAULT_SETTINGS, groups: [{ id: "A", name: "1조", bonus: 0 }] },
+    regions: [{ id: 'r1', name: '서울' }, { id: 'r2', name: '게스트시', guest: true }],
+    players: [
+      { id: 'p1', name: 'A', regionId: 'r1', gender: 'M', group: 'A', handicap: 0, isRep: true, games: [200, 200, 200] },
+      { id: 'p2', name: 'G', regionId: 'r2', gender: 'M', group: 'A', handicap: 0, isRep: true, games: [250, 250, 250] },
+      { id: 'p3', name: 'B', regionId: 'r1', gender: 'F', group: 'A', handicap: 0, games: [150, 150, 150] },
+    ],
+    teams: [{ id: 't1', event: 'baker', regionId: 'r2', name: '게스트시1', members: ['p2'], games: [200, 200] }, { id: 't2', event: 'baker', regionId: 'r1', name: '서울1', members: ['p1'], games: [100, 100] }],
+  };
+  const res = R.regionStandings(data);
+  assert.deepEqual(res.male.map(r => [r.name, r.rank]), [['A', 1]], '게스트는 개인전 순위에서 제외');
+  assert.deepEqual(res.standings.map(r => r.regionName), ['서울'], '게스트 지역은 종합 순위에 없음');
+  assert.deepEqual(res.reps.map(r => r.regionName), ['서울']);
+  assert.deepEqual(res.baker.map(r => [r.name, r.rank]), [['서울1', 1], ['게스트시1', '']], '게스트 팀은 순위 없이 뒤에');
+  assert.equal(res.standings[0].baker, 3, '게스트 팀이 1위를 차지하지 않음');
+  const all = R.individualRanking(res.playerRows, null, true);
+  assert.equal(all.length, 3, 'includeGuests 로 전체 기록 조회 가능');
+});

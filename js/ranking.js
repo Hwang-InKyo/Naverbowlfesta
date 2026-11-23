@@ -122,6 +122,7 @@
       return {
         playerId: p.id, name: p.name, regionId: p.regionId, regionName: region.name || '(미정)', gender: p.gender === 'F' ? 'F' : 'M',
         birthYear: num(p.birthYear) || '', handicap, included, bonus, adjust, onceTotal: bonus + adjust, group: p.group || '', lane: p.lane || '', pos: p.pos || '', isRep: !!p.isRep,
+        isGuest: !!region.guest,   // 게스트 지역(미가입) 선수: 개인전·지역 순위 집계에서 제외
         ...g, total, score: s.basis === 'scratch' ? g.scratch : total,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0
       };
@@ -131,8 +132,9 @@
   // 총점 → 총핀(비핸디) → 하이게임 → 로우게임 → 연장자(생년 빠른 순, 미입력은 최후순)
   const cmpIndividual = makeComparator([r => r.score, r => r.total, r => r.scratch, r => r.high, r => r.low, r => -(num(r.birthYear) || 9999)]);
 
-  function individualRanking(rows, filter) {
-    const list = rows.filter(filter || (() => true)).map(r => ({ ...r }));
+  /** 개인전 순위. 게스트 지역 선수는 제외한다 (includeGuests=true 면 포함, 전체 기록 조회용) */
+  function individualRanking(rows, filter, includeGuests) {
+    const list = rows.filter(r => (includeGuests || !r.isGuest) && (filter || (() => true))(r)).map(r => ({ ...r }));
     return assignRanks(list, cmpIndividual);
   }
 
@@ -155,20 +157,25 @@
         name: t.name || memberNames.join(' · ') || '(팀)', memberIds: (t.members || []).slice(), memberNames, members,
         lane: t.lane || '', handicap, included, adjust, ...g, total: g.scratch + handicap * g.gamesPlayed + adjust,
         avgGame: g.gamesPlayed ? Math.round((g.scratch / g.gamesPlayed) * 10) / 10 : 0,
-        valid: members.length === EVENTS[event].size
+        valid: members.length === EVENTS[event].size, isGuest: !!region.guest
       };
     });
   }
 
   const cmpTeam = makeComparator([r => r.total, r => r.scratch, r => r.high, r => r.low]);
-  function teamRanking(rows) { return assignRanks(rows.map(r => ({ ...r })), cmpTeam); }
+  /** 팀 순위. 게스트 지역 팀은 순위 없이 뒤에 붙는다 (rank = '') */
+  function teamRanking(rows) {
+    const ranked = assignRanks(rows.filter(r => !r.isGuest).map(r => ({ ...r })), cmpTeam);
+    const guests = rows.filter(r => r.isGuest).map(r => ({ ...r, rank: '' })).sort(cmpTeam);
+    return ranked.concat(guests);
+  }
 
   // ===== 지역 대표 =====
   function repRanking(pRows, regions, settings) {
     const s = mergeSettings(settings);
     const byRegion = new Map();
-    (regions || []).forEach(r => byRegion.set(r.id, { regionId: r.id, regionName: r.name, reps: [], score: 0, scratch: 0, count: 0, short: true }));
-    pRows.filter(r => r.isRep).forEach(r => {
+    (regions || []).filter(r => !r.guest).forEach(r => byRegion.set(r.id, { regionId: r.id, regionName: r.name, reps: [], score: 0, scratch: 0, count: 0, short: true }));
+    pRows.filter(r => r.isRep && !r.isGuest).forEach(r => {
       if (!byRegion.has(r.regionId)) byRegion.set(r.regionId, { regionId: r.regionId, regionName: r.regionName, reps: [], score: 0, scratch: 0, count: 0, short: true });
       const a = byRegion.get(r.regionId);
       a.reps.push({ name: r.name, score: r.score, total: r.total, scratch: r.scratch, gamesPlayed: r.gamesPlayed });
@@ -188,6 +195,7 @@
   function regionStandings(data) {
     const s = mergeSettings(data.settings);
     const regions = data.regions || [];
+    const members = regions.filter(r => !r.guest);   // 게스트 지역은 지역 종합에서 제외
     const pRows = playerRows(data.players, regions, s);
     const male = individualRanking(pRows, r => r.gender === 'M');
     const female = individualRanking(pRows, r => r.gender === 'F');
@@ -196,7 +204,7 @@
     const reps = repRanking(pRows, regions, s);
 
     const acc = new Map();
-    regions.forEach(r => acc.set(r.id, { regionId: r.id, regionName: r.name, male: 0, female: 0, reps: 0, scotch: 0, baker: 0, total: 0, details: [] }));
+    members.forEach(r => acc.set(r.id, { regionId: r.id, regionName: r.name, male: 0, female: 0, reps: 0, scotch: 0, baker: 0, total: 0, details: [] }));
     const add = (regionId, field, pts, detail) => {
       if (!pts || !acc.has(regionId)) return;
       const a = acc.get(regionId); a[field] += pts; a.total += pts; a.details.push({ field, pts, ...detail });

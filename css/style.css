@@ -389,3 +389,4 @@ body.is-public .tbl th, body.is-public .tbl td { padding: 8px 5px; }
 #fin-pay-table input[type="text"].sm { width: 100%; min-width: 110px; box-sizing: border-box; }
 #fin-pay-table input[type="checkbox"] { width: 18px; height: 18px; }
 #fin-pay-table .form-error { font-size: 11px; }
+.badge.guest-badge { background: #EEE8D8; color: #6B5E3C; }

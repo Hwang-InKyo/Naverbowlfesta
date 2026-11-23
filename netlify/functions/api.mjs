@@ -118,7 +118,7 @@ function saveSettings(d, patch) {
 }
 function saveRegion(d, r) {
   r = { ...(r || {}) }; r.id = r.id || newId('r');
-  upsert(d.regions, { id: r.id, name: r.name || '', leader: r.leader || '', note: r.note || '' });
+  upsert(d.regions, { id: r.id, name: r.name || '', leader: r.leader || '', note: r.note || '', guest: !!r.guest });
   d.__dirty = true; return d.regions;
 }
 function deleteRegion(d, id) {
@@ -175,7 +175,7 @@ function resetAll(d, keepSettings) {
 function importAll(d, src) {
   if (src.finance && typeof src.finance === 'object') d.finance = src.finance;
   if (src.settings) { const { adminPin, ...rest } = src.settings; d.settings = { ...(d.settings || {}), ...rest }; }
-  if (Array.isArray(src.regions)) d.regions = src.regions.map(r => ({ id: r.id || newId('r'), name: r.name || '', leader: r.leader || '', note: r.note || '' }));
+  if (Array.isArray(src.regions)) d.regions = src.regions.map(r => ({ id: r.id || newId('r'), name: r.name || '', leader: r.leader || '', note: r.note || '', guest: !!r.guest }));
   if (Array.isArray(src.players)) d.players = src.players.map(p => normPlayer({ ...p, id: p.id || newId('p') }));
   if (Array.isArray(src.teams)) d.teams = src.teams.map(t => normTeam({ ...t, id: t.id || newId('t') }));
   d.results = src.results || null;
