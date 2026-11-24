@@ -3,34 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>제46회 네이버 볼링 동호회 서울 전국대회 · QR 안내문</title>
+  <title>제47회 네이버 볼링 동호회 일산 전국대회 · QR 안내문</title>
   <meta name="description" content="회원 조회 화면 QR 코드 안내문. 카메라로 찍으면 실시간 점수·레인 배정·순위 화면이 열립니다.">
-  <meta property="og:title" content="제46회 네이버 볼링 동호회 서울 전국대회 · QR 안내문">
+  <meta property="og:title" content="제47회 네이버 볼링 동호회 일산 전국대회 · QR 안내문">
   <meta property="og:image" content="https://naverbowlfesta.netlify.app/qr.png">
   <link rel="icon" href="icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 15mm; }
-    :root { --navy: #1E2537; --orange: #FF5A2E; --paper: #F5F2EA; --text-2: #555; }
+    @page { size: A4 portrait; margin: 0; }
+    :root { --navy: #1E2537; --navy-2: #2B3449; --orange: #FF5A2E; --paper: #F5F2EA; --cream: #FFF8EE; --text-2: #5B5F6B; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--navy); font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; }
+    html, body { margin: 0; }
+    body { background: #d9d4c7; color: var(--navy); font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e3ded2; font-size: 13px; }
     .toolbar a, .toolbar button { font: inherit; font-weight: 700; padding: 8px 14px; border-radius: 10px; border: 1px solid #d6d0c2; background: #fff; color: var(--navy); text-decoration: none; cursor: pointer; }
     .toolbar .primary { background: var(--orange); border-color: var(--orange); color: #fff; }
     .toolbar .sp { flex: 1; }
-    .sheet { max-width: 720px; margin: 24px auto; background: #fff; border-radius: 16px; padding: 48px 32px; text-align: center; box-shadow: 0 2px 14px rgba(0,0,0,.06); }
-    h1 { font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif; font-weight: 400; font-size: 34px; line-height: 1.25; margin: 0 0 6px; }
-    .sub { font-size: 16px; color: var(--text-2); margin-bottom: 28px; }
-    .qr { width: min(72vw, 360px); height: auto; margin: 0 auto; display: block; }
-    .url { font-size: 20px; font-weight: 700; margin-top: 24px; word-break: break-all; }
-    .url a { color: var(--navy); text-decoration: none; border-bottom: 2px solid var(--orange); }
-    .how { font-size: 14px; color: var(--text-2); margin-top: 14px; line-height: 1.8; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 26px; text-align: left; }
-    .step { background: var(--paper); border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
-    .step b { display: block; color: var(--orange); font-size: 12px; margin-bottom: 2px; }
-    @media (max-width: 520px) { .steps { grid-template-columns: 1fr; } h1 { font-size: 27px; } .sheet { padding: 32px 20px; margin: 12px; } }
-    @media print { body { background: #fff; } .toolbar { display: none; } .sheet { box-shadow: none; border-radius: 0; max-width: none; margin: 0; padding: 10mm 0 0; } .qr { width: 110mm; } h1 { font-size: 30px; } }
+    /* A4 210×297mm */
+    .page { width: 210mm; min-height: 297mm; margin: 16px auto; background: var(--paper); position: relative; overflow: hidden; box-shadow: 0 6px 30px rgba(0,0,0,.18); }
+    .band { background: var(--navy); color: #fff; padding: 16mm 16mm 12mm; position: relative; }
+    .band::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 6mm; background: var(--orange); }
+    .eyebrow { font-size: 12px; letter-spacing: 4px; color: #C9CDD8; margin-bottom: 5mm; font-weight: 500; }
+    .num { font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif; font-size: 78px; line-height: .9; color: var(--orange); letter-spacing: -2px; }
+    .num small { font-size: 34px; color: #fff; letter-spacing: 0; margin-left: 6px; }
+    h1 { font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif; font-weight: 400; font-size: 40px; line-height: 1.15; margin: 3mm 0 0; letter-spacing: -0.5px; }
+    .pins { position: absolute; right: 14mm; top: 16mm; width: 42mm; opacity: .95; }
+    .body { padding: 9mm 16mm 26mm; text-align: center; }
+    .lead { font-size: 18px; font-weight: 700; margin: 0 0 5mm; }
+    .lead span { color: var(--orange); }
+    .qr-card { display: inline-block; background: #fff; border-radius: 20px; padding: 7mm; box-shadow: 0 4px 18px rgba(30,37,55,.12); border: 1px solid #e6e0d2; }
+    .qr-card img { width: 78mm; height: 78mm; display: block; }
+    .url { font-size: 21px; font-weight: 900; margin-top: 5mm; letter-spacing: .2px; }
+    .url a { color: var(--navy); text-decoration: none; border-bottom: 3px solid var(--orange); padding-bottom: 2px; }
+    .how { font-size: 13px; color: var(--text-2); margin-top: 3mm; line-height: 1.6; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 7mm 0 0; text-align: left; }
+    .step { background: #fff; border-radius: 14px; padding: 4mm 4.5mm; font-size: 12px; line-height: 1.5; border-top: 4px solid var(--orange); }
+    .step b { display: block; font-size: 14px; margin-bottom: 1.5mm; }
+    .step b i { font-style: normal; display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--navy); color: #fff; text-align: center; line-height: 22px; font-size: 12px; margin-right: 6px; }
+    .foot { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--text-2); border-top: 1px solid #ddd6c6; padding-top: 4mm; }
+    .foot b { color: var(--navy); font-size: 13px; }
+    @media screen and (max-width: 820px) { .page { width: auto; min-height: 0; margin: 10px; } .band { padding: 14mm 7mm 12mm; } h1 { font-size: 30px; } .num { font-size: 64px; } .num small { font-size: 24px; } .pins { width: 26mm; top: 10mm; right: 7mm; } .body { padding: 10mm 6mm 34mm; } .qr-card img { width: min(70vw, 80mm); height: auto; } .steps { grid-template-columns: 1fr; } .foot { position: static; margin-top: 8mm; flex-direction: column; gap: 4px; align-items: flex-start; } }
+    @media print { body { background: #fff; } .toolbar { display: none; } .page { margin: 0; box-shadow: none; width: 210mm; height: 297mm; } }
   </style>
 </head>
 <body>
@@ -41,17 +56,25 @@
     <a href="qr.png" download="naverbowlfesta-qr.png">QR 이미지(PNG)</a>
     <button type="button" onclick="window.print()">인쇄</button>
   </div>
-  <div class="sheet">
-    <h1>제46회 네이버 볼링 동호회<br>서울 전국대회</h1>
-    <div class="sub">실시간 점수 · 레인 배정 · 순위 조회</div>
-    <img class="qr" src="qr.svg" alt="회원 조회 화면 QR 코드" width="360" height="360">
-    <div class="url"><a href="https://naverbowlfesta.netlify.app/">naverbowlfesta.netlify.app</a></div>
-    <div class="how">카메라로 QR을 찍으면 바로 열립니다. 로그인 없이 이름으로 검색하세요.</div>
-    <div class="steps">
-      <div class="step"><b>1. 검색</b>이름을 입력하면 내 조·레인·핸디·참가 종목이 나옵니다.</div>
-      <div class="step"><b>2. 배정</b>조별·스카치·베이커 레인 배정을 확인합니다.</div>
-      <div class="step"><b>3. 순위</b>개인전·팀·지역 종합 순위와 전체 기록을 실시간으로 봅니다.</div>
+  <div class="page">
+    <div class="band">
+      <div class="eyebrow">NAVER BOWLING CLUB · NATIONAL TOURNAMENT</div>
+      <div class="num">47<small>회</small></div>
+      <h1>네이버 볼링 동호회<br>일산 전국대회</h1>
+      <svg class="pins" viewBox="0 0 100 100" aria-hidden="true"><g fill="#F5F2EA"><path d="M40 8c-7 0-11 6-11 13 0 6 4 9 4 16 0 8-8 14-8 30 0 12 6 22 15 22s15-10 15-22c0-16-8-22-8-30 0-7 4-10 4-16 0-7-4-13-11-13z"/><path d="M66 20c-6 0-9 5-9 11 0 5 3 8 3 13 0 7-7 12-7 25 0 10 5 18 13 18s13-8 13-18c0-13-7-18-7-25 0-5 3-8 3-13 0-6-3-11-9-11z" opacity=".8"/></g><g fill="#FF5A2E"><rect x="33" y="26" width="14" height="4" rx="2"/><rect x="33" y="33" width="14" height="4" rx="2"/><rect x="60" y="36" width="12" height="3.5" rx="1.8" opacity=".8"/><rect x="60" y="42" width="12" height="3.5" rx="1.8" opacity=".8"/></g><circle cx="24" cy="80" r="14" fill="#FF5A2E"/><g fill="#1E2537"><circle cx="20" cy="75" r="2"/><circle cx="26" cy="73" r="2"/><circle cx="24" cy="80" r="2"/></g></svg>
     </div>
+    <div class="body">
+      <p class="lead">실시간 점수 · 레인 배정 · 순위를 <span>휴대폰으로</span> 확인하세요</p>
+      <div class="qr-card"><img src="qr.svg" alt="회원 조회 화면 QR 코드" width="360" height="360"></div>
+      <div class="url"><a href="https://naverbowlfesta.netlify.app/">naverbowlfesta.netlify.app</a></div>
+      <div class="how">카메라 앱으로 QR을 비추면 바로 열립니다 · 로그인 없음 · 설치 없음</div>
+      <div class="steps">
+        <div class="step"><b><i>1</i>검색</b>이름을 입력하면 내 조·레인·핸디·참가 종목이 나옵니다.</div>
+        <div class="step"><b><i>2</i>배정</b>조별·스카치·베이커 레인 배정을 확인합니다.</div>
+        <div class="step"><b><i>3</i>순위</b>개인전·팀·지역 종합 순위와 전체 기록을 실시간으로 봅니다.</div>
+      </div>
+    </div>
+    <div class="foot"><div><b>네이버 볼링 동호회</b><br>cafe.naver.com/bowl</div><div>주최 · 일산 아르케존</div></div>
   </div>
 </body>
 </html>
