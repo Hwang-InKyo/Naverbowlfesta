@@ -1,12 +1,17 @@
 """테이블에 붙이는 레인 이동 안내문(A4 가로, 테이블당 1장) HTML 생성.
-사용: python3 tools/make-lane-move.py [레인 수=16] [이동 테이블 수=2] > docs/lane-move.html
+사용: python3 tools/make-lane-move.py [레인 수=16] [이동 테이블 수=2] [mono] > docs/lane-move.html  (mono = 흑백 잉크 절약판)
 개인전은 1게임 후 오른쪽으로 두 테이블(4레인) 이동, 끝에서는 처음으로 돌아간다. 예: 1·2 → 5·6 → 9·10, 13·14 → 1·2."""
 import sys
 lanes = int(sys.argv[1]) if len(sys.argv) > 1 else 16
 step = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+mono = len(sys.argv) > 3 and sys.argv[3] == 'mono'   # 흑백(잉크 절약) 버전: 배경 없음, 선으로만 구분
 tables = lanes // 2
 def lanes_of(t): return (2 * t - 1, 2 * t)
 def nxt(t): return (t - 1 + step) % tables + 1
+MONO_CSS = '''body.mono .page { background: #fff; } body.mono .tag { background: #fff; color: #000; border: 2px solid #000; } body.mono .tag.right { background: #000; color: #fff; }
+body.mono .box { background: #fff; border: 2px solid #000; } body.mono .box.next { background: #fff; border: 5px solid #000; }
+body.mono .lbl, body.mono .box.next .lbl, body.mono .atxt, body.mono .rule, body.mono .path b, body.mono .num, body.mono .box.next .num, body.mono .unit, body.mono .num i { color: #000; }
+body.mono .arrow path { stroke: #000; } body.mono .foot { border-top-color: #000; }'''
 pages = []
 for t in range(1, tables + 1):
     a, b = lanes_of(t); n = nxt(t); na, nb = lanes_of(n); n2 = nxt(n); n2a, n2b = lanes_of(n2)
@@ -45,5 +50,6 @@ html = f'''<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>레
 .path {{ font-size: 20px; font-weight: 700; }} .path b {{ display: block; font-size: 13px; color: #5B5F6B; font-weight: 700; margin-bottom: 1mm; }}
 .rule {{ font-size: 14px; color: #5B5F6B; text-align: right; max-width: 110mm; line-height: 1.5; }}
 @media print {{ body {{ background: #fff; }} .page {{ margin: 0; }} }}
-</style></head><body>{''.join(pages)}</body></html>'''
+{MONO_CSS if mono else ''}
+</style></head><body class="{'mono' if mono else ''}">{''.join(pages)}</body></html>'''
 sys.stdout.write(html)
