@@ -239,7 +239,7 @@
     const rules = (s.rulesNote || '').split('\n').filter(Boolean);
     const shown = state.rulesOpen ? rules : rules.slice(0, 3);
     return `<div class="hero hero-home">
-      <div class="hero-top"><div class="brand-row"><div class="brand-mark sm">볼</div><span class="hero-sub">${esc(hostRegionName())} 주최</span></div><div class="row" style="gap:6px">${heroBadge()}${adminEntry()}</div></div>
+      <div class="hero-top"><div class="brand-row"><div class="brand-mark sm">볼</div><span class="hero-sub">${esc(hostRegionName())} 주최</span></div><div class="row" style="gap:6px">${heroBadge()}<a class="hero-admin" href="qr.html" title="QR 안내문">QR</a>${adminEntry()}</div></div>
       <h1 class="hero-title">${esc(s.name)}</h1>
       <p class="hero-meta">${dates.map(fmtDate).join('–')}${s.venue ? ' · ' + esc(s.venue) : ''}</p>
       <div class="hero-panel"><div class="lbl"><span>개인전 진행률</span><b>${pr.individual.done} / ${pr.individual.total}명</b></div><div class="bar"><span style="width:${pct}%"></span></div></div>
