@@ -252,6 +252,7 @@
         ${s.schedule ? `<div class="schedule">${esc(s.schedule)}</div>` : ''}
         ${rules.length ? `<div class="schedule" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">${shown.map(esc).join('\n')}</div>${rules.length > 3 ? `<button class="rules-toggle" data-action="toggle-rules">${state.rulesOpen ? '접기' : `규정 전체 보기 (${rules.length - 3}줄 더)`}</button>` : ''}` : ''}
         ${!s.schedule && !rules.length ? '<p class="empty">안내 문구가 없습니다.</p>' : ''}</div>
+      <a class="quick" href="qr.html"><div class="ic">QR</div><div><div class="t">QR 안내문</div><div class="d">이 화면으로 연결되는 QR · 인쇄 · PDF 내려받기</div></div>${ICON.arrow}</a>
     </div>`;
   }
 
@@ -427,8 +428,8 @@
     const demoNotice = Store.mode() === 'local' ? `<div class="card" style="border-color:var(--orange-input-line);background:var(--orange-input)"><b>데모 모드</b> <span class="muted">— 지금 입력하는 데이터는 이 브라우저에만 저장되어 다른 기기(핸드폰 등)에서는 보이지 않습니다. Netlify에 배포된 주소(naverbowlfesta.netlify.app)에서 열면 자동으로 서버 모드가 되어 모든 기기가 같은 데이터를 봅니다.</span></div>` : '';
     const pubUrl = 'https://naverbowlfesta.netlify.app/';
     const qrCard = `<div class="card qr-card"><div class="row" style="gap:18px;align-items:center;flex-wrap:wrap"><img src="qr.svg" alt="회원용 페이지 QR" width="132" height="132" style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px">
-      <div style="flex:1;min-width:220px"><h2 style="margin:0 0 6px">회원용 QR 코드</h2><p class="muted small" style="margin:0 0 10px">카메라로 찍으면 회원 조회 화면(${esc(pubUrl)})이 열립니다. 단체 채팅방 공지나 볼링장 안내판에 붙이세요.</p>
-      <div class="row"><button class="btn btn-small btn-primary" data-action="print-qr">QR 안내문 인쇄 (A4)</button><a class="btn btn-small btn-outline" href="qr.png" download="naverbowlfesta-qr.png">PNG 내려받기</a><button class="btn btn-small btn-outline" data-action="copy-url">주소 복사</button></div></div></div></div>`;
+      <div style="flex:1;min-width:220px"><h2 style="margin:0 0 6px">회원용 QR 코드</h2><p class="muted small" style="margin:0 0 10px">카메라로 찍으면 회원 조회 화면(${esc(pubUrl)})이 열립니다. 안내문 페이지 주소는 ${esc(pubUrl)}qr.html 이며 회원 홈 화면에서도 열 수 있습니다.</p>
+      <div class="row"><a class="btn btn-small btn-primary" href="qr.html" target="_blank">QR 안내문 페이지</a><a class="btn btn-small btn-outline" href="qr-poster.pdf" download="naverbowlfesta-qr.pdf">PDF 내려받기</a><a class="btn btn-small btn-outline" href="qr.png" download="naverbowlfesta-qr.png">PNG 내려받기</a><button class="btn btn-small btn-outline" data-action="copy-url">주소 복사</button></div></div></div></div>`;
     return demoNotice + qrCard + `<div class="stat-grid" style="margin-bottom:20px">
       ${stat(`${d.players.length}<small>명</small>`, '참가 선수', `${d.regions.length}개 지역 참가`)}
       ${stat(`${Math.floor((s.lanes || 0) / 2)}<small>테이블</small>`, '등록 레인', `${s.lanes || 0}레인 · 테이블당 ${s.perTable || 4}명 · ${d.players.filter(p => p.lane).length}명 배정됨`)}
