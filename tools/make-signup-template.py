@@ -42,7 +42,7 @@ def build(ws, example):
     widths = {'A': 6.5, 'B': 4.5, 'C': 10, 'D': 4.5, 'E': 6, 'F': 5.5, 'G': 5.5, 'H': 9, 'I': 10, 'J': 4.5, 'K': 7.5, 'L': 5.5, 'M': 9.5}
     for k, v in widths.items(): ws.column_dimensions[k].width = v
     for r in range(1, 90): ws.row_dimensions[r].height = 14
-    merge(ws, 1, 1, LASTCOL); t = ws.cell(row=1, column=1, value='제46회 네이버 볼링 동호회 서울 전국대회 참가 신청서'); t.font = f(14, True); t.alignment = center; ws.row_dimensions[1].height = 24
+    merge(ws, 1, 1, LASTCOL); t = ws.cell(row=1, column=1, value='제47회 네이버 볼링 동호회 일산 전국대회 참가 신청서'); t.font = f(14, True); t.alignment = center; ws.row_dimensions[1].height = 24
     merge(ws, 2, 1, LASTCOL); n = ws.cell(row=2, column=1, value='노란 칸만 입력 · 3인조/팀 명단에는 개인전 명단과 똑같은 이름 · 챔프전은 1조만 · 사이드·챔프전 참가는 O 표시 · 수량·금액은 자동 계산')
     n.font = f(8, color='595959'); n.alignment = center
     merge(ws, 3, 1, 2); hcell(ws, 3, 1, '클럽명', grey, '000000'); merge(ws, 3, 3, 5); icell(ws, 3, 3, '드림존' if example else None, left, '@'); bordered(ws, 3, 4, 5)
@@ -145,7 +145,7 @@ def build(ws, example):
     merge(ws, r, 1, 2); hcell(ws, r, 1, '총금액', gold, '000000', 10)
     merge(ws, r, 3, 4); tt = ws.cell(row=r, column=3, value=f'=M{tr}'); tt.font = f(10, True); tt.fill = gold; tt.border = box; tt.alignment = right; tt.number_format = '#,##0'; bordered(ws, r, 4, 4)
     merge(ws, r, 5, LASTCOL); acc = ws.cell(row=r, column=5, value='입금계좌 : (대회 공지의 계좌)'); acc.font = f(9); acc.alignment = left
-    merge(ws, r + 1, 1, LASTCOL); fin = ws.cell(row=r + 1, column=1, value='위와 같이 제46회 네이버 볼링 동호회 서울 전국대회 참가를 신청합니다.'); fin.font = f(10, True); fin.alignment = center
+    merge(ws, r + 1, 1, LASTCOL); fin = ws.cell(row=r + 1, column=1, value='위와 같이 제47회 네이버 볼링 동호회 일산 전국대회 참가를 신청합니다.'); fin.font = f(10, True); fin.alignment = center
     end_row = r + 1
     # 인쇄: A4 세로, 폭 맞춤. 1쪽 = 개인전·참가비·3인조, 2쪽 = 스카치·베이커·총금액 (총 인원 행 뒤에서 쪽 나눔)
     from openpyxl.worksheet.pagebreak import Break
